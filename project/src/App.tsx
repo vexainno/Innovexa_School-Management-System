@@ -58,6 +58,7 @@ import {
 
 // New Student Dashboard
 import { StudentPortalDashboard } from '@/pages/StudentPortalDashboard';
+import { StudentAttendanceCalendar } from '@/pages/StudentAttendanceCalendar';
 
 import { StudentCounselingAppointments } from '@/pages/StudentCounselingAppointments';
 
@@ -191,7 +192,7 @@ const ROUTES: Record<Role, Record<string, PageComponent>> = {
     subjects: StudentSubjects,
     assignments: StudentAssignments,
     resources: StudentResources,
-    attendance: StudentAttendance,
+    attendance: StudentAttendanceCalendar,
     results: StudentResults,
     'report-card': StudentReportCard,
     library: StudentLibrary,
