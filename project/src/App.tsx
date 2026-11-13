@@ -66,7 +66,7 @@ import {
 } from '@/pages/earlyWarningPages';
 
 // Counselor Support Notifications
-import { CounselorSupportNotifications } from '@/pages/CounselorSupportNotifications';
+import { CounselorSupportNotifications } from '@/pages/CounselorSupportNotification';
 
 import type { Role } from '@/types';
 
