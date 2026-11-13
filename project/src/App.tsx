@@ -56,6 +56,9 @@ import {
   ParentReportCard, ParentFees, ParentLibrary, ParentAnnouncements,
 } from '@/pages/StudentParentPages';
 
+// New Student Dashboard
+import { StudentPortalDashboard } from '@/pages/StudentPortalDashboard';
+
 import { StudentCounselingAppointments } from '@/pages/StudentCounselingAppointments';
 
 // Early-Warning Alerts
@@ -146,11 +149,9 @@ const ROUTES: Record<Role, Record<string, PageComponent>> = {
     interventions: CounselorInterventions,
     'follow-ups': CounselorFollowUps,
     availability: CounselorAvailability,
-
     'early-warning-dashboard': EarlyWarningDashboard,
     'early-warning': EarlyWarningAlerts,
     'early-warning-rules': EarlyWarningRules,
-
     'student-support-notifications': CounselorSupportNotifications,
   },
 
@@ -185,7 +186,7 @@ const ROUTES: Record<Role, Record<string, PageComponent>> = {
   },
 
   student: {
-    dashboard: StudentDashboard,
+    dashboard: StudentPortalDashboard,
     classes: StudentClasses,
     subjects: StudentSubjects,
     assignments: StudentAssignments,
