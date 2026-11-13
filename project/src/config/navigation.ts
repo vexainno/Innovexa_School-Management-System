@@ -1,3 +1,4 @@
+
 import type { Role, NavItem } from '@/types';
 
 export const ROLE_NAV: Record<Role, NavItem[]> = {
@@ -12,6 +13,7 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
     { label: 'Reports', icon: 'FileBarChart', page: 'reports' },
     { label: 'Announcements', icon: 'Megaphone', page: 'announcements' },
   ],
+
   vice_principal: [
     { label: 'Dashboard', icon: 'LayoutDashboard', page: 'dashboard' },
     { label: 'Daily Operations', icon: 'Activity', page: 'operations' },
@@ -22,6 +24,7 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
     { label: 'Notices', icon: 'BellRing', page: 'notices' },
     { label: 'Reports', icon: 'FileBarChart', page: 'reports' },
   ],
+
   dean: [
     { label: 'Dashboard', icon: 'LayoutDashboard', page: 'dashboard' },
     { label: 'Discipline Cases', icon: 'Gavel', page: 'discipline' },
@@ -29,6 +32,7 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
     { label: 'Student Activities', icon: 'Activity', page: 'activities' },
     { label: 'Follow-up Actions', icon: 'ListChecks', page: 'follow-ups' },
   ],
+
   registrar: [
     { label: 'Dashboard', icon: 'LayoutDashboard', page: 'dashboard' },
     { label: 'Admissions', icon: 'UserPlus', page: 'admissions' },
@@ -38,6 +42,7 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
     { label: 'Transfers', icon: 'ArrowLeftRight', page: 'transfers' },
     { label: 'Documents', icon: 'FolderOpen', page: 'documents' },
   ],
+
   academic_officer: [
     { label: 'Dashboard', icon: 'LayoutDashboard', page: 'dashboard' },
     { label: 'Examinations', icon: 'FileCheck', page: 'examinations' },
@@ -47,6 +52,7 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
     { label: 'Classes & Subjects', icon: 'BookOpen', page: 'classes-subjects' },
     { label: 'Reports', icon: 'FileBarChart', page: 'reports' },
   ],
+
   teacher: [
     { label: 'Dashboard', icon: 'LayoutDashboard', page: 'dashboard' },
     { label: 'My Classes', icon: 'Users', page: 'classes' },
@@ -59,13 +65,20 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
     { label: 'Learning Resources', icon: 'Library', page: 'resources' },
     { label: 'Messages', icon: 'MessageSquare', page: 'messages' },
   ],
+
   counselor: [
     { label: 'Dashboard', icon: 'LayoutDashboard', page: 'dashboard' },
     { label: 'Support Cases', icon: 'HeartHandshake', page: 'cases' },
     { label: 'At-Risk Students', icon: 'AlertTriangle', page: 'at-risk' },
     { label: 'Intervention Records', icon: 'FileHeart', page: 'interventions' },
     { label: 'Follow-up Activities', icon: 'ListChecks', page: 'follow-ups' },
+    { label: 'My Availability', icon: 'CalendarCheck', page: 'availability' },
+    { label: 'Alert Overview', icon: 'Activity', page: 'early-warning-dashboard' },
+    { label: 'Early-Warning Alerts', icon: 'AlertTriangle', page: 'early-warning' },
+    { label: 'Alert Rule Settings', icon: 'SlidersHorizontal', page: 'early-warning-rules' },
+    { label: 'Student Support Notifications', icon: 'Bell', page: 'student-support-notifications' },
   ],
+
   finance: [
     { label: 'Dashboard', icon: 'LayoutDashboard', page: 'dashboard' },
     { label: 'Student Fees', icon: 'Receipt', page: 'fees' },
@@ -75,6 +88,7 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
     { label: 'Receipts', icon: 'ReceiptText', page: 'receipts' },
     { label: 'Financial Reports', icon: 'BarChart3', page: 'reports' },
   ],
+
   librarian: [
     { label: 'Dashboard', icon: 'LayoutDashboard', page: 'dashboard' },
     { label: 'Book Catalog', icon: 'BookOpen', page: 'catalog' },
@@ -83,6 +97,7 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
     { label: 'Borrowed Books', icon: 'BookMarked', page: 'borrowed' },
     { label: 'Borrowing History', icon: 'History', page: 'history' },
   ],
+
   super_admin: [
     { label: 'Dashboard', icon: 'LayoutDashboard', page: 'dashboard' },
     { label: 'User Accounts', icon: 'Users', page: 'users' },
@@ -93,6 +108,7 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
     { label: 'Integrations', icon: 'Plug', page: 'integrations' },
     { label: 'Security / Audit Logs', icon: 'ScrollText', page: 'audit' },
   ],
+
   student: [
     { label: 'Dashboard', icon: 'LayoutDashboard', page: 'dashboard' },
     { label: 'My Classes', icon: 'Users', page: 'classes' },
@@ -103,8 +119,10 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
     { label: 'My Results', icon: 'Award', page: 'results' },
     { label: 'My Report Card', icon: 'FileBadge', page: 'report-card' },
     { label: 'Library', icon: 'BookOpen', page: 'library' },
+    { label: 'Counseling & Support', icon: 'HeartHandshake', page: 'counseling-appointments' },
     { label: 'Announcements', icon: 'Megaphone', page: 'announcements' },
   ],
+
   parent: [
     { label: 'Dashboard', icon: 'LayoutDashboard', page: 'dashboard' },
     { label: 'My Children', icon: 'Users', page: 'children' },

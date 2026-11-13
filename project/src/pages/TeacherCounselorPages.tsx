@@ -1,57 +1,163 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
+import { useAuth } from '@/context/AuthContext';
 import {
   Users, BookOpen, CalendarCheck, FileText, ClipboardList, ClipboardEdit,
   Library, MessageSquare, GraduationCap, CheckCircle2, AlertCircle,
   Clock, Save, Send, Plus, Upload, FileSpreadsheet, Check, UsersRound,
+  CalendarDays, Pencil, X, CalendarClock, ShieldCheck, UserRoundPlus,
 } from 'lucide-react';
 import { PageHeader, StatCard, SectionCard, EmptyState, Avatar, ProgressBar, Modal } from '@/components/ui';
 import {
   CLASSES, SUBJECTS, STUDENTS, ASSESSMENTS, GRADES, ATTENDANCE, ANNOUNCEMENTS,
 } from '@/data/mockData';
 import type { Assessment, AttendanceRecord } from '@/types';
-import { getTeacherClasses, getTeacherSubjects, getStudentsForClass, getAttendance, setAttendance, getGradebooks, setGradebooks, type WorkflowAttendance, type WorkflowGradebook } from '@/data/workflow';
+import { getTeacherClasses, getTeacherSubjects, getSubjectAssignments, getStudentsForClass, getAttendance, setAttendance, getGradebooks, setGradebooks, type WorkflowAttendance, type WorkflowGradebook } from '@/data/workflow';
+import {
+  getCounselorCases, createCounselorCase, updateCounselorCase,
+  getStudentRiskRecords, upsertStudentRisk,
+  getCounselingInterventions, createCounselingIntervention, updateCounselingIntervention,
+  getCounselorAvailability, saveCounselorAvailability,
+  getCounselingAppointments, scheduleCounselingAppointment, denyCounselingAppointment,
+  type CounselorSupportCase, type SupportCaseCategory, type SupportCaseStatus,
+  type StudentRiskLevel, type InterventionStatus, type CounselorAvailabilitySlot,
+} from '@/data/counselorWorkflow';
+
+// Return the classes a teacher is allowed to work with in the frontend demo.
+// A class sponsor can see the class, and a subject teacher can see the class
+// associated with their assigned subject. Backend authorization must enforce this later.
+function getClassesVisibleToTeacher(teacherId: string) {
+  const sponsoredClasses = getTeacherClasses(teacherId);
+  const assignedSubjectIds = getSubjectAssignments()
+    .filter((assignment) => assignment.teacherId === teacherId)
+    .map((assignment) => assignment.subjectId);
+  const subjectClassIds = SUBJECTS
+    .filter((subject) => assignedSubjectIds.includes(subject.id))
+    .map((subject) => subject.classId);
+  const visibleClassIds = new Set([
+    ...sponsoredClasses.map((classInfo) => classInfo.id),
+    ...subjectClassIds,
+  ]);
+
+  return CLASSES.filter((classInfo) => visibleClassIds.has(classInfo.id));
+}
 
 // --- Teacher Dashboard ---
 export function TeacherDashboard({ onNavigate }: { onNavigate: (page: string) => void }) {
-  const myClasses = CLASSES;
-  const mySubjects = SUBJECTS;
-  const draftAssessments = ASSESSMENTS.filter((a) => a.status === 'draft');
+  const { user } = useAuth();
+  const teacherId = user?.id ?? '';
+  const myClasses = teacherId ? getClassesVisibleToTeacher(teacherId) : [];
+  const mySubjects = teacherId ? getTeacherSubjects(teacherId) : [];
+  const classIds = new Set(myClasses.map((classInfo) => classInfo.id));
+  const subjectIds = new Set(mySubjects.map((subject) => subject.id));
+  const studentIds = new Set(
+    myClasses.flatMap((classInfo) =>
+      getStudentsForClass(classInfo.id).map((student) => student.id)
+    )
+  );
+  const draftAssessments = ASSESSMENTS.filter(
+    (assessment) =>
+      assessment.status === 'draft' &&
+      classIds.has(assessment.classId) &&
+      subjectIds.has(assessment.subjectId)
+  );
+
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Teacher Dashboard" subtitle="Your classes, subjects, and teaching activities." />
+      <PageHeader
+        title="Teacher Dashboard"
+        subtitle="Your assigned classes, subjects, students, and teaching activities."
+      />
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="My Classes" value={myClasses.length} icon={<Users className="w-5 h-5" />} />
-        <StatCard label="My Subjects" value={mySubjects.length} icon={<BookOpen className="w-5 h-5" />} color="accent" />
-        <StatCard label="My Students" value={STUDENTS.length} icon={<Users className="w-5 h-5" />} color="success" />
-        <StatCard label="Draft Assessments" value={draftAssessments.length} icon={<ClipboardList className="w-5 h-5" />} color="warning" />
+        <StatCard
+          label="My Classes"
+          value={myClasses.length}
+          icon={<Users className="w-5 h-5" />}
+          onClick={() => onNavigate('classes')}
+        />
+        <StatCard
+          label="My Subjects"
+          value={mySubjects.length}
+          icon={<BookOpen className="w-5 h-5" />}
+          color="accent"
+          onClick={() => onNavigate('subjects')}
+        />
+        <StatCard
+          label="My Students"
+          value={studentIds.size}
+          icon={<Users className="w-5 h-5" />}
+          color="success"
+          onClick={() => onNavigate('students')}
+        />
+        <StatCard
+          label="Draft Assessments"
+          value={draftAssessments.length}
+          icon={<ClipboardList className="w-5 h-5" />}
+          color="warning"
+          onClick={() => onNavigate('assessments')}
+        />
       </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <SectionCard title="My Classes" action={<button onClick={() => onNavigate('classes')} className="btn-ghost text-sm">View All</button>}>
-          <div className="space-y-3">
-            {myClasses.slice(0, 4).map((c) => (
-              <div key={c.id} className="flex items-center gap-3 p-3 rounded-lg border border-navy-100">
-                <div className="p-2 rounded-lg bg-navy-100 text-navy-700"><Users className="w-4 h-4" /></div>
-                <div className="flex-1"><p className="text-sm font-medium text-navy-800">{c.name}</p><p className="text-xs text-navy-400">{c.studentCount} students — {c.room}</p></div>
-              </div>
-            ))}
-          </div>
+        <SectionCard
+          title="My Classes"
+          action={
+            <button onClick={() => onNavigate('classes')} className="btn-ghost text-sm">
+              View All
+            </button>
+          }
+        >
+          {myClasses.length > 0 ? (
+            <div className="space-y-3">
+              {myClasses.slice(0, 4).map((classInfo) => {
+                const classStudentCount = getStudentsForClass(classInfo.id).length;
+                return (
+                  <button
+                    key={classInfo.id}
+                    type="button"
+                    onClick={() => onNavigate('classes')}
+                    className="w-full flex items-center gap-3 p-3 rounded-lg border border-navy-100 hover:bg-navy-50 transition-colors text-left"
+                  >
+                    <span className="p-2 rounded-lg bg-navy-100 text-navy-700">
+                      <Users className="w-4 h-4" />
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-sm font-medium text-navy-800">
+                        {classInfo.name}
+                      </span>
+                      <span className="block text-xs text-navy-400">
+                        {classStudentCount} students · {classInfo.room}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <EmptyState
+              icon={<Users className="w-6 h-6" />}
+              title="No classes assigned"
+              message="Your assigned classes will appear here when the school updates your teaching assignments."
+            />
+          )}
         </SectionCard>
+
         <SectionCard title="Quick Actions">
           <div className="space-y-2">
             <button onClick={() => onNavigate('attendance')} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-navy-50 transition-colors text-left">
-              <div className="p-2 rounded-lg bg-navy-100 text-navy-700"><CalendarCheck className="w-4 h-4" /></div>
+              <span className="p-2 rounded-lg bg-navy-100 text-navy-700"><CalendarCheck className="w-4 h-4" /></span>
               <span className="text-sm font-medium text-navy-700">Take Attendance</span>
             </button>
             <button onClick={() => onNavigate('gradebook')} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-navy-50 transition-colors text-left">
-              <div className="p-2 rounded-lg bg-navy-100 text-navy-700"><ClipboardEdit className="w-4 h-4" /></div>
+              <span className="p-2 rounded-lg bg-navy-100 text-navy-700"><ClipboardEdit className="w-4 h-4" /></span>
               <span className="text-sm font-medium text-navy-700">Open Gradebook</span>
             </button>
             <button onClick={() => onNavigate('assignments')} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-navy-50 transition-colors text-left">
-              <div className="p-2 rounded-lg bg-navy-100 text-navy-700"><FileText className="w-4 h-4" /></div>
+              <span className="p-2 rounded-lg bg-navy-100 text-navy-700"><FileText className="w-4 h-4" /></span>
               <span className="text-sm font-medium text-navy-700">Create Assignment</span>
             </button>
             <button onClick={() => onNavigate('resources')} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-navy-50 transition-colors text-left">
-              <div className="p-2 rounded-lg bg-navy-100 text-navy-700"><Library className="w-4 h-4" /></div>
+              <span className="p-2 rounded-lg bg-navy-100 text-navy-700"><Library className="w-4 h-4" /></span>
               <span className="text-sm font-medium text-navy-700">Upload Resources</span>
             </button>
           </div>
@@ -295,131 +401,291 @@ export function TeacherMessages() {
   );
 }
 
-// --- Counselor ---
+// --- Counselor workspace ---
+const CASE_CATEGORY_LABELS: Record<SupportCaseCategory, string> = {
+  academic: 'Academic',
+  behavioral: 'Behavioral',
+  social: 'Social',
+  family: 'Family',
+  other: 'Other',
+};
+const CASE_STATUS_LABELS: Record<SupportCaseStatus, string> = {
+  open: 'Open',
+  in_progress: 'In Progress',
+  follow_up: 'Follow-up',
+  closed: 'Closed',
+};
+const RISK_LABELS: Record<StudentRiskLevel, string> = {
+  at_risk: 'At Risk',
+  moderate: 'Moderate',
+  fine: 'Fine',
+};
+const INTERVENTION_STATUS_LABELS: Record<InterventionStatus, string> = {
+  ongoing: 'Ongoing',
+  improving: 'Improving',
+  done: 'Done',
+  denied: 'Denied',
+};
+
+function statusBadge(status: string) {
+  if (['open', 'at_risk', 'denied'].includes(status)) return 'badge-error';
+  if (['in_progress', 'ongoing', 'moderate'].includes(status)) return 'badge-warning';
+  if (['done', 'fine', 'improving', 'scheduled'].includes(status)) return 'badge-success';
+  return 'badge-info';
+}
+
+function CounselorFormField({ label, children }: { label: string; children: ReactNode }) {
+  return <div className="space-y-1"><label className="label">{label}</label>{children}</div>;
+}
+
 export function CounselorDashboard({ onNavigate }: { onNavigate: (page: string) => void }) {
+  const cases = getCounselorCases();
+  const risks = getStudentRiskRecords();
+  const appointments = getCounselingAppointments();
+  const weekStart = new Date();
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+  const sessionsThisWeek = appointments.filter((item) => {
+    if (item.status !== 'scheduled' || !item.scheduledDate) return false;
+    const date = new Date(`${item.scheduledDate}T12:00:00`);
+    return date >= weekStart && date <= weekEnd;
+  }).length;
+  const followUpsDue = appointments.filter((item) => item.status === 'pending').length;
+  const activeCases = cases.filter((item) => item.status !== 'closed');
+
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Guidance Counselor Dashboard" subtitle="Student support and counseling." />
+      <PageHeader title="Guidance Counselor Dashboard" subtitle="Manage student support, counseling appointments, interventions, and follow-ups." />
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Active Cases" value="4" icon={<AlertCircle className="w-5 h-5" />} color="warning" />
-        <StatCard label="At-Risk Students" value="3" icon={<AlertCircle className="w-5 h-5" />} color="error" />
-        <StatCard label="Sessions This Week" value="7" icon={<CheckCircle2 className="w-5 h-5" />} color="success" />
-        <StatCard label="Follow-ups Due" value="2" icon={<Clock className="w-5 h-5" />} color="navy" />
+        <StatCard label="Active Cases" value={activeCases.length} icon={<AlertCircle className="w-5 h-5" />} color="warning" onClick={() => onNavigate('cases')} />
+        <StatCard label="At-Risk Students" value={risks.filter((item) => item.level === 'at_risk').length} icon={<AlertCircle className="w-5 h-5" />} color="error" onClick={() => onNavigate('at-risk')} />
+        <StatCard label="Sessions This Week" value={sessionsThisWeek} icon={<CheckCircle2 className="w-5 h-5" />} color="success" onClick={() => onNavigate('follow-ups')} />
+        <StatCard label="Follow-ups Due" value={followUpsDue} icon={<Clock className="w-5 h-5" />} color="navy" onClick={() => onNavigate('follow-ups')} />
       </div>
-      <SectionCard title="Active Support Cases" action={<button onClick={() => onNavigate('cases')} className="btn-ghost text-sm">View All</button>}>
-        <div className="space-y-3">
-          {[
-            { student: 'Augustine T. Kollie', category: 'Behavioral', status: 'In Progress', date: '2026-09-19' },
-            { student: 'Daniel S. Tuah', category: 'Academic', status: 'Follow-up', date: '2026-09-10' },
-            { student: 'Mohammed S. Kromah', category: 'Social', status: 'Open', date: '2026-09-17' },
-            { student: 'Esther L. Barclay', category: 'Family', status: 'In Progress', date: '2026-09-05' },
-          ].map((c, i) => (
-            <div key={i} className="flex items-center gap-3 p-3 rounded-lg border border-navy-100">
-              <div className="p-2 rounded-lg bg-navy-100 text-navy-700"><AlertCircle className="w-4 h-4" /></div>
-              <div className="flex-1"><p className="text-sm font-medium text-navy-800">{c.student}</p><p className="text-xs text-navy-400">{c.category} — Opened: {c.date}</p></div>
-              <span className={c.status === 'Open' ? 'badge-error' : c.status === 'In Progress' ? 'badge-warning' : 'badge-info'}>{c.status}</span>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="xl:col-span-2">
+          <SectionCard title="Active Support Cases" action={<button onClick={() => onNavigate('cases')} className="btn-ghost text-sm">View All</button>}>
+            <div className="space-y-3">
+              {activeCases.slice(0, 5).map((item) => (
+                <button key={item.id} onClick={() => onNavigate('cases')} className="w-full flex items-center gap-3 p-3 rounded-lg border border-navy-100 hover:bg-navy-50 text-left">
+                  <span className="p-2 rounded-lg bg-navy-100 text-navy-700"><AlertCircle className="w-4 h-4" /></span>
+                  <span className="flex-1 min-w-0"><span className="block text-sm font-medium text-navy-800">{item.studentName}</span><span className="block text-xs text-navy-400">{CASE_CATEGORY_LABELS[item.category]} · Opened {item.dateOpened}</span></span>
+                  <span className={statusBadge(item.status)}>{CASE_STATUS_LABELS[item.status]}</span>
+                </button>
+              ))}
+              {activeCases.length === 0 && <EmptyState icon={<CheckCircle2 className="w-6 h-6" />} title="No active cases" message="New support cases will appear here." />}
             </div>
-          ))}
+          </SectionCard>
         </div>
-      </SectionCard>
+        <SectionCard title="Counselor Workspace">
+          <div className="space-y-2">
+            {[
+              ['cases', 'Manage Support Cases', <FileText className="w-4 h-4" />],
+              ['at-risk', 'Review Student Risk', <AlertCircle className="w-4 h-4" />],
+              ['interventions', 'Intervention Records', <ClipboardList className="w-4 h-4" />],
+              ['follow-ups', 'Appointments & Follow-ups', <CalendarClock className="w-4 h-4" />],
+              ['availability', 'My Availability', <CalendarDays className="w-4 h-4" />],
+            ].map(([page, label, icon]) => (
+              <button key={String(page)} onClick={() => onNavigate(String(page))} className="w-full flex items-center gap-3 rounded-lg p-3 text-left hover:bg-navy-50 text-sm font-medium text-navy-700">
+                <span className="text-navy-600">{icon}</span>{label}<span className="ml-auto text-navy-400">→</span>
+              </button>
+            ))}
+          </div>
+        </SectionCard>
+      </div>
     </div>
   );
 }
 
 export function CounselorCases() {
+  const [cases, setCases] = useState<CounselorSupportCase[]>(getCounselorCases());
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const emptyForm = { studentId: '', category: 'academic' as SupportCaseCategory, status: 'open' as SupportCaseStatus, dateOpened: new Date().toISOString().slice(0, 10), lastSession: '', confidential: true, summary: '' };
+  const [form, setForm] = useState(emptyForm);
+
+  const refresh = () => setCases(getCounselorCases());
+  const startEdit = (item: CounselorSupportCase) => {
+    setEditingId(item.id);
+    setForm({ studentId: item.studentId, category: item.category, status: item.status, dateOpened: item.dateOpened, lastSession: item.lastSession || '', confidential: item.confidential, summary: item.summary });
+    setShowForm(true);
+  };
+  const save = () => {
+    if (!form.studentId || !form.summary.trim()) return;
+    if (editingId) {
+      updateCounselorCase(editingId, { ...form, lastSession: form.lastSession || undefined });
+    } else {
+      createCounselorCase({ ...form, lastSession: form.lastSession || undefined, createdBy: 'u7' });
+    }
+    setEditingId(null);
+    setForm(emptyForm);
+    setShowForm(false);
+    refresh();
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Support Cases" subtitle="Active student support and counseling cases." />
-      <SectionCard title="All Cases">
-        <table className="table-base">
-          <thead><tr><th>Student</th><th>Category</th><th>Status</th><th>Opened</th><th>Last Session</th><th>Confidential</th></tr></thead>
-          <tbody>
-            {[
-              { student: 'Augustine T. Kollie', category: 'Behavioral', status: 'In Progress', opened: '2026-09-19', last: '2026-09-20', confidential: true },
-              { student: 'Daniel S. Tuah', category: 'Academic', status: 'Follow-up', opened: '2026-09-10', last: '2026-09-18', confidential: true },
-              { student: 'Mohammed S. Kromah', category: 'Social', status: 'Open', opened: '2026-09-17', last: '—', confidential: true },
-              { student: 'Esther L. Barclay', category: 'Family', status: 'In Progress', opened: '2026-09-05', last: '2026-09-16', confidential: true },
-            ].map((c, i) => (
-              <tr key={i}>
-                <td className="font-medium text-navy-800">{c.student}</td>
-                <td><span className="badge-info">{c.category}</span></td>
-                <td><span className={c.status === 'Open' ? 'badge-error' : c.status === 'In Progress' ? 'badge-warning' : 'badge-info'}>{c.status}</span></td>
-                <td>{c.opened}</td><td>{c.last}</td>
-                <td>{c.confidential ? <span className="badge-error">Confidential</span> : '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <PageHeader title="Support Cases" subtitle="Create, review, and update student support and counseling cases." action={<button onClick={() => { setEditingId(null); setForm(emptyForm); setShowForm((value) => !value); }} className="btn-primary"><Plus className="w-4 h-4" /> New Case</button>} />
+      {showForm && <SectionCard title={editingId ? 'Edit Support Case' : 'Create Support Case'}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <CounselorFormField label="Student"><select className="input" value={form.studentId} onChange={(e) => setForm({ ...form, studentId: e.target.value })}><option value="">Select student</option>{STUDENTS.map((student) => <option key={student.id} value={student.id}>{student.name} · Grade {student.class}</option>)}</select></CounselorFormField>
+          <CounselorFormField label="Category"><select className="input" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value as SupportCaseCategory })}>{Object.entries(CASE_CATEGORY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></CounselorFormField>
+          <CounselorFormField label="Status"><select className="input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as SupportCaseStatus })}>{Object.entries(CASE_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></CounselorFormField>
+          <CounselorFormField label="Date Opened"><input type="date" className="input" value={form.dateOpened} onChange={(e) => setForm({ ...form, dateOpened: e.target.value })} /></CounselorFormField>
+          <CounselorFormField label="Last Session"><input type="date" className="input" value={form.lastSession} onChange={(e) => setForm({ ...form, lastSession: e.target.value })} /></CounselorFormField>
+          <CounselorFormField label="Confidentiality"><label className="flex items-center gap-2 text-sm text-navy-700"><input type="checkbox" checked={form.confidential} onChange={(e) => setForm({ ...form, confidential: e.target.checked })} /> Mark this case confidential</label></CounselorFormField>
+          <div className="md:col-span-2"><CounselorFormField label="Case summary"><textarea className="input min-h-24" value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} placeholder="Record a concise case summary. Avoid unnecessary sensitive details." /></CounselorFormField></div>
+        </div>
+        <div className="flex justify-end gap-2 mt-4"><button className="btn-secondary" onClick={() => setShowForm(false)}>Cancel</button><button className="btn-primary" onClick={save} disabled={!form.studentId || !form.summary.trim()}><Save className="w-4 h-4" /> Save Case</button></div>
+      </SectionCard>}
+      <SectionCard title={`All Cases (${cases.length})`}>
+        <div className="overflow-x-auto"><table className="table-base"><thead><tr><th>Student</th><th>Category</th><th>Status</th><th>Opened</th><th>Last Session</th><th>Confidential</th><th>Action</th></tr></thead><tbody>
+          {cases.map((item) => <tr key={item.id}><td className="font-medium text-navy-800">{item.studentName}</td><td><span className="badge-info">{CASE_CATEGORY_LABELS[item.category]}</span></td><td><span className={statusBadge(item.status)}>{CASE_STATUS_LABELS[item.status]}</span></td><td>{item.dateOpened}</td><td>{item.lastSession || '—'}</td><td>{item.confidential ? <span className="badge-error">Confidential</span> : 'Standard'}</td><td><button className="btn-secondary text-xs" onClick={() => startEdit(item)}><Pencil className="w-3 h-3" /> Edit</button></td></tr>)}
+          {cases.length === 0 && <tr><td colSpan={7} className="text-center py-8 text-navy-400">No support cases have been created.</td></tr>}
+        </tbody></table></div>
       </SectionCard>
     </div>
   );
 }
 
 export function CounselorAtRisk() {
-  return (
-    <div className="space-y-6 animate-fade-in">
-      <PageHeader title="At-Risk Students" subtitle="Students identified as at-risk." />
-      <SectionCard title="At-Risk Students">
-        <div className="space-y-3">
-          {[
-            { name: 'Augustine T. Kollie', grade: 'Grade 10A', reason: 'Behavioral concerns', risk: 'Moderate' },
-            { name: 'Daniel S. Tuah', grade: 'Grade 9A', reason: 'Academic decline', risk: 'Moderate' },
-            { name: 'Mohammed S. Kromah', grade: 'Grade 8B', reason: 'Social conflict', risk: 'High' },
-          ].map((s, i) => (
-            <div key={i} className="flex items-center gap-3 p-3 rounded-lg border border-navy-100">
-              <Avatar name={s.name} color="bg-error-500" size="sm" />
-              <div className="flex-1"><p className="text-sm font-medium text-navy-800">{s.name}</p><p className="text-xs text-navy-400">{s.grade} — {s.reason}</p></div>
-              <span className={s.risk === 'High' ? 'badge-error' : 'badge-warning'}>{s.risk} Risk</span>
-            </div>
-          ))}
-        </div>
-      </SectionCard>
-    </div>
-  );
+  const [records, setRecords] = useState(getStudentRiskRecords());
+  const [studentId, setStudentId] = useState('');
+  const [level, setLevel] = useState<StudentRiskLevel>('moderate');
+  const [reason, setReason] = useState('');
+  const save = () => {
+    if (!studentId) return;
+    upsertStudentRisk(studentId, level, reason, 'u7');
+    setRecords(getStudentRiskRecords());
+    setStudentId('');
+    setReason('');
+  };
+  return <div className="space-y-6 animate-fade-in">
+    <PageHeader title="At-Risk Students" subtitle="Review and update each student's support risk level." />
+    <SectionCard title="Update Student Risk">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+        <CounselorFormField label="Student"><select className="input" value={studentId} onChange={(e) => setStudentId(e.target.value)}><option value="">Select student</option>{STUDENTS.map((student) => <option key={student.id} value={student.id}>{student.name}</option>)}</select></CounselorFormField>
+        <CounselorFormField label="Risk Level"><select className="input" value={level} onChange={(e) => setLevel(e.target.value as StudentRiskLevel)}><option value="at_risk">At Risk</option><option value="moderate">Moderate</option><option value="fine">Fine</option></select></CounselorFormField>
+        <CounselorFormField label="Reason / Review Note"><input className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Brief reason or note" /></CounselorFormField>
+        <button className="btn-primary" disabled={!studentId} onClick={save}><Save className="w-4 h-4" /> Save Risk Level</button>
+      </div>
+    </SectionCard>
+    <SectionCard title={`Student Risk Register (${records.length})`}>
+      <div className="overflow-x-auto"><table className="table-base"><thead><tr><th>Student</th><th>Class</th><th>Risk Level</th><th>Reason</th><th>Last Reviewed</th></tr></thead><tbody>
+        {records.map((item) => <tr key={item.studentId}><td className="font-medium text-navy-800">{item.studentName}</td><td>{item.className}</td><td><span className={statusBadge(item.level)}>{RISK_LABELS[item.level]}</span></td><td>{item.reason || '—'}</td><td>{item.reviewedAt}</td></tr>)}
+        {records.length === 0 && <tr><td colSpan={5} className="text-center py-8 text-navy-400">No student risk reviews recorded.</td></tr>}
+      </tbody></table></div>
+    </SectionCard>
+  </div>;
 }
 
 export function CounselorInterventions() {
-  return (
-    <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Intervention Records" subtitle="Recorded interventions and support actions." />
-      <SectionCard title="Interventions">
-        <div className="space-y-3">
-          {[
-            { student: 'Augustine T. Kollie', intervention: 'Behavioral counseling session', date: '2026-09-20', outcome: 'Ongoing' },
-            { student: 'Daniel S. Tuah', intervention: 'Academic support plan', date: '2026-09-18', outcome: 'Improving' },
-            { student: 'Esther L. Barclay', intervention: 'Family support referral', date: '2026-09-16', outcome: 'Ongoing' },
-          ].map((iv, i) => (
-            <div key={i} className="p-4 rounded-lg border border-navy-100">
-              <div className="flex items-start justify-between">
-                <div><p className="text-sm font-medium text-navy-800">{iv.student}</p><p className="text-xs text-navy-400 mt-1">{iv.intervention} — {iv.date}</p></div>
-                <span className={iv.outcome === 'Improving' ? 'badge-success' : 'badge-warning'}>{iv.outcome}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </SectionCard>
-    </div>
-  );
+  const [records, setRecords] = useState(getCounselingInterventions());
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState({ studentId: '', type: '', description: '', status: 'ongoing' as InterventionStatus, startDate: new Date().toISOString().slice(0, 10) });
+  const save = () => {
+    if (!form.studentId || !form.type.trim()) return;
+    if (editingId) updateCounselingIntervention(editingId, form);
+    else createCounselingIntervention({ ...form, counselorId: 'u7' });
+    setRecords(getCounselingInterventions());
+    setEditingId(null);
+    setForm({ studentId: '', type: '', description: '', status: 'ongoing', startDate: new Date().toISOString().slice(0, 10) });
+  };
+  const edit = (item: (typeof records)[number]) => {
+    setEditingId(item.id);
+    setForm({ studentId: item.studentId, type: item.type, description: item.description, status: item.status, startDate: item.startDate });
+  };
+  return <div className="space-y-6 animate-fade-in">
+    <PageHeader title="Intervention Records" subtitle="Create support plans and update their progress as counseling work continues." />
+    <SectionCard title={editingId ? 'Edit Intervention' : 'Create Intervention'}>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <CounselorFormField label="Student"><select className="input" value={form.studentId} onChange={(e) => setForm({ ...form, studentId: e.target.value })}><option value="">Select student</option>{STUDENTS.map((student) => <option key={student.id} value={student.id}>{student.name}</option>)}</select></CounselorFormField>
+        <CounselorFormField label="Intervention Type"><input className="input" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} placeholder="e.g. Academic support plan" /></CounselorFormField>
+        <CounselorFormField label="Status"><select className="input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as InterventionStatus })}>{Object.entries(INTERVENTION_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></CounselorFormField>
+        <CounselorFormField label="Start Date"><input type="date" className="input" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /></CounselorFormField>
+        <div className="md:col-span-2"><CounselorFormField label="Description"><textarea className="input min-h-20" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Describe the support plan or intervention." /></CounselorFormField></div>
+      </div>
+      <div className="flex justify-end gap-2 mt-4">{editingId && <button className="btn-secondary" onClick={() => { setEditingId(null); setForm({ studentId: '', type: '', description: '', status: 'ongoing', startDate: new Date().toISOString().slice(0, 10) }); }}>Cancel Edit</button>}<button className="btn-primary" onClick={save} disabled={!form.studentId || !form.type.trim()}><Save className="w-4 h-4" /> Save Intervention</button></div>
+    </SectionCard>
+    <SectionCard title={`Intervention Register (${records.length})`}>
+      <div className="space-y-3">{records.map((item) => <div key={item.id} className="rounded-lg border border-navy-100 p-4 flex flex-col md:flex-row md:items-center gap-3">
+        <div className="flex-1"><p className="font-medium text-navy-800">{item.studentName}</p><p className="text-sm text-navy-600">{item.type}</p><p className="text-xs text-navy-400 mt-1">{item.description} · Started {item.startDate}</p></div>
+        <select aria-label={`Update status for ${item.studentName}`} className="input md:w-40" value={item.status} onChange={(e) => { updateCounselingIntervention(item.id, { status: e.target.value as InterventionStatus }); setRecords(getCounselingInterventions()); }}>{Object.entries(INTERVENTION_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+        <button className="btn-secondary text-xs" onClick={() => edit(item)}><Pencil className="w-3 h-3" /> Edit</button>
+      </div>)}{records.length === 0 && <EmptyState icon={<ClipboardList className="w-6 h-6" />} title="No interventions yet" message="Create an intervention to start tracking support progress." />}</div>
+    </SectionCard>
+  </div>;
 }
 
 export function CounselorFollowUps() {
-  return (
-    <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Follow-up Activities" subtitle="Scheduled follow-up sessions." />
-      <SectionCard title="Upcoming Follow-ups">
-        <div className="space-y-3">
-          {[
-            { student: 'Augustine T. Kollie', activity: 'Follow-up counseling session', date: '2026-09-24', time: '10:00 AM' },
-            { student: 'Esther L. Barclay', activity: 'Family support check-in', date: '2026-09-25', time: '2:00 PM' },
-          ].map((f, i) => (
-            <div key={i} className="flex items-center gap-3 p-3 rounded-lg border border-navy-100">
-              <div className="p-2 rounded-lg bg-navy-100 text-navy-700"><Clock className="w-4 h-4" /></div>
-              <div className="flex-1"><p className="text-sm font-medium text-navy-800">{f.student}</p><p className="text-xs text-navy-400">{f.activity} — {f.date} at {f.time}</p></div>
-              <span className="badge-info">Scheduled</span>
-            </div>
-          ))}
-        </div>
-      </SectionCard>
-    </div>
-  );
+  const [appointments, setAppointments] = useState(getCounselingAppointments());
+  const [availability, setAvailability] = useState(getCounselorAvailability());
+  const [selected, setSelected] = useState<string | null>(null);
+  const [schedule, setSchedule] = useState({ date: '', time: '', note: '' });
+  const [error, setError] = useState('');
+  const refresh = () => setAppointments(getCounselingAppointments());
+  const pending = appointments.filter((item) => item.status === 'pending');
+  const scheduled = appointments.filter((item) => item.status === 'scheduled');
+  const denied = appointments.filter((item) => item.status === 'denied');
+  const saveSchedule = () => {
+    if (!selected || !schedule.date || !schedule.time) return;
+    try {
+      scheduleCounselingAppointment(selected, schedule.date, schedule.time, schedule.note);
+      setSelected(null);
+      setSchedule({ date: '', time: '', note: '' });
+      setError('');
+      refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to schedule this appointment.');
+    }
+  };
+  const deny = (id: string) => {
+    const note = window.prompt('Optional reason for denying this appointment request:') || '';
+    denyCounselingAppointment(id, note);
+    refresh();
+  };
+  return <div className="space-y-6 animate-fade-in">
+    <PageHeader title="Follow-up Activities" subtitle="Review student requests, schedule appointments, and manage appointment outcomes." />
+    <SectionCard title={`Pending Requests (${pending.length})`}>
+      <div className="space-y-3">{pending.map((item) => <div key={item.id} className="rounded-lg border border-navy-100 p-4">
+        <div className="flex flex-col md:flex-row md:items-start gap-3"><div className="flex-1"><p className="font-medium text-navy-800">{item.studentName}</p><p className="text-sm text-navy-600">{item.requestType} · {item.className}</p><p className="text-sm text-navy-400 mt-1">{item.studentMessage || 'No additional message'}</p><p className="text-xs text-navy-400 mt-1">Requested {new Date(item.requestedAt).toLocaleString()}</p></div><span className="badge-warning">Pending</span></div>
+        {selected === item.id ? <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+          <CounselorFormField label="Appointment Date"><input type="date" min={new Date().toISOString().slice(0, 10)} className="input" value={schedule.date} onChange={(e) => setSchedule({ ...schedule, date: e.target.value })} /></CounselorFormField>
+          <CounselorFormField label="Appointment Time"><input type="time" className="input" value={schedule.time} onChange={(e) => setSchedule({ ...schedule, time: e.target.value })} /></CounselorFormField>
+          <CounselorFormField label="Student-facing note"><input className="input" value={schedule.note} onChange={(e) => setSchedule({ ...schedule, note: e.target.value })} placeholder="Optional scheduling note" /></CounselorFormField>
+          <div className="md:col-span-3"><p className="text-xs text-navy-500">The selected date and time must fall within your published availability.</p>{error && <p role="alert" className="text-sm text-red-600 mt-1">{error}</p>}</div>
+          <div className="md:col-span-3 flex justify-end gap-2"><button className="btn-secondary" onClick={() => { setSelected(null); setError(''); }}>Cancel</button><button className="btn-primary" onClick={saveSchedule} disabled={!schedule.date || !schedule.time}><CalendarCheck className="w-4 h-4" /> Confirm & Schedule</button></div>
+        </div> : <div className="flex justify-end gap-2 mt-3"><button className="btn-secondary text-xs" onClick={() => { setSelected(item.id); setError(''); }}><CalendarClock className="w-3 h-3" /> Accept & Schedule</button><button className="btn-secondary text-xs text-red-600" onClick={() => deny(item.id)}><X className="w-3 h-3" /> Deny</button></div>}
+      </div>)}{pending.length === 0 && <EmptyState icon={<CheckCircle2 className="w-6 h-6" />} title="No pending requests" message="New student appointment requests will appear here." />}</div>
+    </SectionCard>
+    <SectionCard title={`Scheduled Appointments (${scheduled.length})`}>
+      <div className="space-y-3">{scheduled.map((item) => <div key={item.id} className="flex flex-col md:flex-row md:items-center gap-3 p-3 rounded-lg border border-navy-100"><div className="p-2 rounded-lg bg-navy-100 text-navy-700"><CalendarDays className="w-4 h-4" /></div><div className="flex-1"><p className="font-medium text-navy-800">{item.studentName}</p><p className="text-sm text-navy-500">{item.requestType} · {item.scheduledDate} at {item.scheduledTime}</p></div><span className="badge-success">Scheduled</span></div>)}{scheduled.length === 0 && <p className="text-sm text-navy-400">No appointments scheduled.</p>}</div>
+    </SectionCard>
+    <SectionCard title={`Denied Requests (${denied.length})`}>
+      <div className="space-y-2">{denied.map((item) => <div key={item.id} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-navy-100"><div><p className="font-medium text-navy-800">{item.studentName}</p><p className="text-xs text-navy-400">{item.requestType}{item.counselorNote ? ` · ${item.counselorNote}` : ''}</p></div><span className="badge-error">Denied</span></div>)}{denied.length === 0 && <p className="text-sm text-navy-400">No denied requests.</p>}</div>
+    </SectionCard>
+    <CounselorAvailabilityPanel availability={availability} onChange={(next) => { saveCounselorAvailability(next); setAvailability(next); }} />
+  </div>;
+}
+
+export function CounselorAvailability() {
+  const [availability, setAvailability] = useState(getCounselorAvailability());
+  return <div className="space-y-6 animate-fade-in"><PageHeader title="My Availability" subtitle="Publish the days and time ranges when students may request counseling appointments." /><CounselorAvailabilityPanel availability={availability} onChange={(next) => { saveCounselorAvailability(next); setAvailability(next); }} /></div>;
+}
+
+function CounselorAvailabilityPanel({ availability, onChange }: { availability: CounselorAvailabilitySlot[]; onChange: (next: CounselorAvailabilitySlot[]) => void }) {
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const addSlot = () => onChange([...availability, { id: `slot-${Date.now()}`, dayOfWeek: 1, startTime: '09:00', endTime: '12:00', active: true }]);
+  const updateSlot = (id: string, changes: Partial<CounselorAvailabilitySlot>) => onChange(availability.map((slot) => slot.id === id ? { ...slot, ...changes } : slot));
+  return <SectionCard title="Weekly Availability" action={<button className="btn-primary text-sm" onClick={addSlot}><Plus className="w-4 h-4" /> Add Time Slot</button>}>
+    <p className="text-sm text-navy-500 mb-4">Only active availability slots can be used when confirming student appointment requests.</p>
+    <div className="space-y-3">{availability.map((slot) => <div key={slot.id} className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end rounded-lg border border-navy-100 p-3">
+      <CounselorFormField label="Day"><select className="input" value={slot.dayOfWeek} onChange={(e) => updateSlot(slot.id, { dayOfWeek: Number(e.target.value) })}>{days.map((day, index) => <option key={day} value={index}>{day}</option>)}</select></CounselorFormField>
+      <CounselorFormField label="Start"><input type="time" className="input" value={slot.startTime} onChange={(e) => updateSlot(slot.id, { startTime: e.target.value })} /></CounselorFormField>
+      <CounselorFormField label="End"><input type="time" className="input" value={slot.endTime} onChange={(e) => updateSlot(slot.id, { endTime: e.target.value })} /></CounselorFormField>
+      <label className="flex items-center gap-2 text-sm text-navy-700 pb-2"><input type="checkbox" checked={slot.active} onChange={(e) => updateSlot(slot.id, { active: e.target.checked })} /> Available</label>
+      <button className="btn-secondary text-xs" onClick={() => onChange(availability.filter((item) => item.id !== slot.id))}><X className="w-3 h-3" /> Remove</button>
+    </div>)}{availability.length === 0 && <EmptyState icon={<CalendarDays className="w-6 h-6" />} title="No availability published" message="Add at least one day and time range before scheduling student requests." />}</div>
+  </SectionCard>;
 }
