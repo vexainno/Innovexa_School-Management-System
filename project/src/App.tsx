@@ -6,60 +6,124 @@ import { LoginPage } from '@/components/LoginPage';
 
 // Principal
 import {
-  PrincipalDashboard, PrincipalGradebookApprovals, PrincipalResults,
-  PrincipalEnrollment, PrincipalAttendance, PrincipalPerformance,
-  PrincipalStudentAffairs, PrincipalReports, PrincipalAnnouncements,
+  PrincipalDashboard,
+  PrincipalGradebookApprovals,
+  PrincipalResults,
+  PrincipalEnrollment,
+  PrincipalAttendance,
+  PrincipalPerformance,
+  PrincipalStudentAffairs,
+  PrincipalReports,
+  PrincipalAnnouncements,
 } from '@/pages/PrincipalPages';
 
 // Vice Principal & Dean
 import {
-  VicePrincipalDashboard, VPOperations, VPAttendance, VPStaff, VPClassManagement,
-  VPStudentAffairs, VPNotices, VPReports,
-  DeanDashboard, DeanDiscipline, DeanAttendance, DeanActivities, DeanFollowUps,
+  VicePrincipalDashboard,
+  VPOperations,
+  VPAttendance,
+  VPStaff,
+  VPClassManagement,
+  VPStudentAffairs,
+  VPNotices,
+  VPReports,
+  DeanDashboard,
+  DeanDiscipline,
+  DeanAttendance,
+  DeanActivities,
+  DeanFollowUps,
 } from '@/pages/VicePrincipalDeanPages';
 
 // Registrar & Academic Officer
 import {
-  RegistrarDashboard, RegistrarAdmissions, RegistrarStudents, RegistrarClasses,
-  RegistrarGuardians, RegistrarTransfers, RegistrarDocuments,
-  AcademicDashboard, AcademicExaminations, AcademicSubmittedGradebooks,
-  AcademicApprovedGrades, AcademicResultsRelease, AcademicClassesSubjects,
+  RegistrarDashboard,
+  RegistrarAdmissions,
+  RegistrarStudents,
+  RegistrarClasses,
+  RegistrarGuardians,
+  RegistrarTransfers,
+  RegistrarDocuments,
+  AcademicDashboard,
+  AcademicExaminations,
+  AcademicSubmittedGradebooks,
+  AcademicApprovedGrades,
+  AcademicResultsRelease,
+  AcademicClassesSubjects,
   AcademicReports,
 } from '@/pages/RegistrarAcademicPages';
 
 // Teacher & Counselor
 import {
-  TeacherDashboard, TeacherClasses, TeacherSubjects, TeacherStudents,
-  TeacherAttendance, TeacherAssignments, TeacherAssessments, TeacherGradebook,
-  TeacherResources, TeacherMessages,
-  CounselorDashboard, CounselorCases, CounselorAtRisk,
-  CounselorInterventions, CounselorFollowUps, CounselorAvailability,
+  TeacherDashboard,
+  TeacherClasses,
+  TeacherSubjects,
+  TeacherStudents,
+  TeacherAttendance,
+  TeacherGradebook,
+  TeacherResources,
+  TeacherMessages,
+  CounselorDashboard,
+  CounselorCases,
+  CounselorAtRisk,
+  CounselorInterventions,
+  CounselorFollowUps,
+  CounselorAvailability,
 } from '@/pages/TeacherCounselorPages';
 
-// Finance, Librarian, Super Admin
+// Teacher Assessment Pages
+import TeacherAssessmentMarking from '@/pages/TeacherAssessmentMarking';
+import TeacherAssessmentBuilder from '@/pages/TeacherAssessmentBuilder';
+
+// Finance, Librarian & Super Admin
 import {
-  FinanceDashboard, FinanceFees, FinanceInvoices, FinancePayments,
-  FinanceOutstanding, FinanceReceipts, FinanceReports,
-  LibrarianDashboard, LibrarianCatalog, LibrarianAddBook, LibrarianRequests,
-  LibrarianBorrowed, LibrarianHistory,
-  SuperAdminDashboard, SuperAdminUsers, SuperAdminRoles, SuperAdminRecovery,
-  SuperAdminSchoolProfile, SuperAdminAcademicStructure, SuperAdminIntegrations,
+  FinanceDashboard,
+  FinanceFees,
+  FinanceInvoices,
+  FinancePayments,
+  FinanceOutstanding,
+  FinanceReceipts,
+  FinanceReports,
+  LibrarianDashboard,
+  LibrarianCatalog,
+  LibrarianAddBook,
+  LibrarianRequests,
+  LibrarianBorrowed,
+  LibrarianHistory,
+  SuperAdminDashboard,
+  SuperAdminUsers,
+  SuperAdminRoles,
+  SuperAdminRecovery,
+  SuperAdminSchoolProfile,
+  SuperAdminAcademicStructure,
+  SuperAdminIntegrations,
   SuperAdminAudit,
 } from '@/pages/FinanceLibrarianAdminPages';
 
 // Student & Parent
 import {
-  StudentDashboard, StudentClasses, StudentSubjects, StudentAssignments,
-  StudentResources, StudentAttendance, StudentResults, StudentReportCard,
-  StudentLibrary, StudentAnnouncements,
-  ParentDashboard, ParentChildren, ParentResults, ParentAttendance,
-  ParentReportCard, ParentFees, ParentLibrary, ParentAnnouncements,
+  StudentDashboard,
+  StudentClasses,
+  StudentSubjects,
+  StudentAssignments,
+  StudentResources,
+  StudentAttendance,
+  StudentReportCard,
+  StudentLibrary,
+  StudentAnnouncements,
+  ParentDashboard,
+  ParentChildren,
+  ParentResults,
+  ParentAttendance,
+  ParentReportCard,
+  ParentFees,
+  ParentLibrary,
+  ParentAnnouncements,
 } from '@/pages/StudentParentPages';
 
-// New Student Dashboard
+// New Student Pages
 import { StudentPortalDashboard } from '@/pages/StudentPortalDashboard';
 import { StudentAttendanceCalendar } from '@/pages/StudentAttendanceCalendar';
-
+import { StudentResultsPage } from '@/pages/StudentResultsPage';
 import { StudentCounselingAppointments } from '@/pages/StudentCounselingAppointments';
 
 // Early-Warning Alerts
@@ -136,8 +200,11 @@ const ROUTES: Record<Role, Record<string, PageComponent>> = {
     subjects: TeacherSubjects,
     students: TeacherStudents,
     attendance: TeacherAttendance,
-    assignments: TeacherAssignments,
-    assessments: TeacherAssessments,
+
+    // Teacher assessment workflows
+    assignments: TeacherAssessmentMarking,
+    assessments: TeacherAssessmentBuilder,
+
     gradebook: TeacherGradebook,
     resources: TeacherResources,
     messages: TeacherMessages,
@@ -193,7 +260,7 @@ const ROUTES: Record<Role, Record<string, PageComponent>> = {
     assignments: StudentAssignments,
     resources: StudentResources,
     attendance: StudentAttendanceCalendar,
-    results: StudentResults,
+    results: StudentResultsPage,
     'report-card': StudentReportCard,
     library: StudentLibrary,
     announcements: StudentAnnouncements,
