@@ -1,17 +1,22 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import {
   Users, BookOpen, CalendarCheck, FileText, ClipboardList, ClipboardEdit,
   Library, MessageSquare, GraduationCap, CheckCircle2, AlertCircle,
   Clock, Save, Send, Plus, Upload, FileSpreadsheet, Check, UsersRound,
   CalendarDays, Pencil, X, CalendarClock, ShieldCheck, UserRoundPlus,
+  UploadCloud, Trash2, Loader2, Download,
 } from 'lucide-react';
 import { PageHeader, StatCard, SectionCard, EmptyState, Avatar, ProgressBar, Modal } from '@/components/ui';
 import {
   CLASSES, SUBJECTS, STUDENTS, ASSESSMENTS, GRADES, ATTENDANCE, ANNOUNCEMENTS,
 } from '@/data/mockData';
 import type { Assessment, AttendanceRecord } from '@/types';
-import { getTeacherClasses, getTeacherSubjects, getSubjectAssignments, getStudentsForClass, getAttendance, setAttendance, getGradebooks, setGradebooks, type WorkflowAttendance, type WorkflowGradebook } from '@/data/workflow';
+import {
+  getTeacherClasses, getTeacherSubjects, getSubjectAssignments,
+  getStudentsForClass, getAttendance, setAttendance, getGradebooks, setGradebooks,
+  type WorkflowAttendance, type WorkflowGradebook,
+} from '@/data/workflow';
 import {
   getCounselorCases, createCounselorCase, updateCounselorCase,
   getStudentRiskRecords, upsertStudentRisk,
@@ -21,6 +26,10 @@ import {
   type CounselorSupportCase, type SupportCaseCategory, type SupportCaseStatus,
   type StudentRiskLevel, type InterventionStatus, type CounselorAvailabilitySlot,
 } from '@/data/counselorWorkflow';
+import {
+  saveLearningResource, getLearningResources, deleteLearningResource,
+  type LearningResource,
+} from '@/data/learningResources';
 
 // Return the classes a teacher is allowed to work with in the frontend demo.
 // A class sponsor can see the class, and a subject teacher can see the class
@@ -321,56 +330,444 @@ export function TeacherGradebook() {
 }
 
 export function TeacherResources() {
+  const { user } = useAuth();
+  const teacherId = user?.id ?? '';
+  const classes = teacherId ? getClassesVisibleToTeacher(teacherId) : [];
+  const subjects = teacherId ? getTeacherSubjects(teacherId) : [];
+
+  const [resources, setResources] = useState<LearningResource[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [showUpload, setShowUpload] = useState(false);
-  const [resources, setResources] = useState([
-    { name: 'Algebra Notes — Chapter 1', subject: 'Mathematics', type: 'PDF', date: '2026-09-10' },
-    { name: 'Physics Lab Manual', subject: 'Physics', type: 'PDF', date: '2026-09-08' },
-    { name: 'Equations Worksheet', subject: 'Mathematics', type: 'DOC', date: '2026-09-12' },
-    { name: "Newton's Laws Slides", subject: 'Physics', type: 'PPT', date: '2026-09-07' },
-  ]);
-  const [form, setForm] = useState({ name: '', subject: 'Mathematics', type: 'PDF' });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [form, setForm] = useState({
+    title: '',
+    description: '',
+    classId: '',
+    subjectId: '',
+  });
+
+  const selectedClass = classes.find((item) => item.id === form.classId);
+  const availableSubjects = subjects.filter(
+    (subject) => subject.classId === form.classId
+  );
+
+  async function loadResources() {
+    try {
+      setLoading(true);
+      const allResources = await getLearningResources();
+      setResources(
+        allResources.filter((resource) => resource.teacherId === teacherId)
+      );
+      setError('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not load resources.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadResources();
+  }, [teacherId]);
+
+  function chooseFile(file?: File) {
+    if (!file) return;
+    setError('');
+    setSuccess('');
+
+    if (file.size > 50 * 1024 * 1024) {
+      setError('The selected file is larger than the 50 MB limit.');
+      return;
+    }
+
+    setSelectedFile(file);
+    if (!form.title.trim()) {
+      setForm((current) => ({
+        ...current,
+        title: file.name.replace(/\.[^/.]+$/, ''),
+      }));
+    }
+  }
+
+  function resetForm() {
+    setForm({ title: '', description: '', classId: '', subjectId: '' });
+    setSelectedFile(null);
+    setError('');
+  }
+
+  function formatFileSize(bytes: number) {
+    if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  async function handleUpload() {
+    if (!teacherId) {
+      setError('Your teacher account could not be identified.');
+      return;
+    }
+    if (!form.title.trim()) {
+      setError('Enter a resource title.');
+      return;
+    }
+    if (!form.classId || !selectedClass) {
+      setError('Select a class before publishing this resource.');
+      return;
+    }
+    if (!form.subjectId) {
+      setError('Select a subject.');
+      return;
+    }
+    if (!selectedFile) {
+      setError('Choose a file to upload.');
+      return;
+    }
+
+    const selectedSubject = subjects.find(
+      (subject) => subject.id === form.subjectId
+    );
+    if (!selectedSubject) {
+      setError('The selected subject could not be found.');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError('');
+      setSuccess('');
+
+      const resource: LearningResource = {
+        id: `resource-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        title: form.title.trim(),
+        description: form.description.trim(),
+        fileName: selectedFile.name,
+        fileType: selectedFile.type || 'application/octet-stream',
+        fileSize: selectedFile.size,
+        classId: selectedClass.id,
+        className: selectedClass.grade,
+        section: selectedClass.section,
+        subjectId: selectedSubject.id,
+        subjectName: selectedSubject.name,
+        teacherId,
+        teacherName: user?.name ?? 'Teacher',
+        uploadedAt: new Date().toISOString(),
+        file: selectedFile,
+      };
+
+      await saveLearningResource(resource);
+      setResources((current) => [resource, ...current]);
+      setSuccess('Resource uploaded and shared with the selected class.');
+      resetForm();
+      setShowUpload(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not upload resource.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(resourceId: string) {
+    if (!window.confirm('Are you sure you want to delete this learning resource?')) {
+      return;
+    }
+
+    try {
+      await deleteLearningResource(resourceId);
+      setResources((current) =>
+        current.filter((resource) => resource.id !== resourceId)
+      );
+      setSuccess('Resource deleted successfully.');
+      setError('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not delete resource.');
+    }
+  }
+
+  function downloadResource(resource: LearningResource) {
+    const url = URL.createObjectURL(resource.file);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = resource.fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Learning Resources" subtitle="Upload and share learning materials." action={<button onClick={() => setShowUpload(true)} className="btn-primary"><Plus className="w-4 h-4" /> Upload Resource</button>} />
-      <SectionCard title="My Resources">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {resources.map((r, i) => (
-            <div key={i} className="card-hover p-5">
-              <div className="p-3 rounded-xl bg-navy-100 text-navy-700 w-fit mb-3"><FileText className="w-5 h-5" /></div>
-              <h3 className="font-semibold text-navy-800 text-sm">{r.name}</h3>
-              <p className="text-xs text-navy-400 mt-1">{r.subject} — {r.type} — {r.date}</p>
-            </div>
-          ))}
+      <PageHeader
+        title="Learning Resources"
+        subtitle="Upload learning materials and share them with your assigned classes."
+        action={
+          <button
+            onClick={() => {
+              setError('');
+              setSuccess('');
+              setShowUpload(true);
+            }}
+            className="btn-primary"
+          >
+            <Plus className="w-4 h-4" />
+            Upload Resource
+          </button>
+        }
+      />
+
+      {success && (
+        <div className="rounded-lg border border-success-200 bg-success-50 p-3 text-sm text-success-700">
+          <CheckCircle2 className="mr-2 inline h-4 w-4" />
+          {success}
         </div>
+      )}
+
+      {error && !showUpload && (
+        <div className="rounded-lg border border-error-200 bg-error-50 p-3 text-sm text-error-700">
+          <AlertCircle className="mr-2 inline h-4 w-4" />
+          {error}
+        </div>
+      )}
+
+      <SectionCard title="My Uploaded Resources">
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 py-12 text-sm text-navy-500">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            Loading resources...
+          </div>
+        ) : resources.length === 0 ? (
+          <EmptyState
+            icon={<Library className="h-8 w-8" />}
+            title="No learning resources yet"
+            message="Upload your first learning resource and share it with your students."
+          />
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {resources.map((resource) => (
+              <div
+                key={resource.id}
+                className="card-hover rounded-xl border border-navy-100 p-5"
+              >
+                <div className="mb-3 flex items-start justify-between">
+                  <div className="w-fit rounded-xl bg-navy-100 p-3 text-navy-700">
+                    <FileText className="h-5 w-5" />
+                  </div>
+                  <button
+                    onClick={() => void handleDelete(resource.id)}
+                    className="rounded-lg p-2 text-navy-400 transition hover:bg-error-50 hover:text-error-600"
+                    title="Delete resource"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <h3 className="text-sm font-semibold text-navy-800">
+                  {resource.title}
+                </h3>
+                <p className="mt-1 text-xs text-navy-500">
+                  {resource.subjectName}
+                </p>
+                <p className="mt-2 text-xs text-navy-400">
+                  {resource.className} {resource.section}
+                </p>
+                <p className="mt-1 break-all text-xs text-navy-400">
+                  {resource.fileName}
+                </p>
+                <p className="mt-1 text-xs text-navy-400">
+                  {formatFileSize(resource.fileSize)} ·{' '}
+                  {new Date(resource.uploadedAt).toLocaleDateString()}
+                </p>
+                <button
+                  onClick={() => downloadResource(resource)}
+                  className="btn-secondary mt-4 w-full text-xs"
+                >
+                  <Download className="h-4 w-4" />
+                  Download File
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </SectionCard>
+
       {showUpload && (
-        <Modal open={true} onClose={() => setShowUpload(false)} title="Upload Resource">
-          <div className="space-y-4">
-            <div><label className="label">Resource Name</label><input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Chapter 5 Notes" /></div>
-            <div className="grid grid-cols-2 gap-4">
-              <div><label className="label">Subject</label>
-                <select className="input" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })}>
-                  {['Mathematics', 'Physics', 'Chemistry', 'Biology', 'English', 'History'].map((s) => <option key={s}>{s}</option>)}
-                </select>
+        <Modal
+          open={true}
+          onClose={() => {
+            if (!saving) {
+              setShowUpload(false);
+              resetForm();
+            }
+          }}
+          title="Upload Learning Resource"
+        >
+          <div className="space-y-5">
+            {error && (
+              <div className="rounded-lg border border-error-200 bg-error-50 p-3 text-sm text-error-700">
+                <AlertCircle className="mr-2 inline h-4 w-4" />
+                {error}
               </div>
-              <div><label className="label">File Type</label>
-                <select className="input" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-                  {['PDF', 'DOC', 'PPT', 'IMG', 'VIDEO'].map((t) => <option key={t}>{t}</option>)}
-                </select>
-              </div>
+            )}
+
+            <div>
+              <label className="label">Resource Title</label>
+              <input
+                className="input"
+                value={form.title}
+                onChange={(event) =>
+                  setForm({ ...form, title: event.target.value })
+                }
+                placeholder="e.g. Mathematics Chapter 5 Notes"
+              />
             </div>
-            <div className="p-4 border-2 border-dashed border-navy-200 rounded-lg text-center">
-              <FileText className="w-8 h-8 text-navy-400 mx-auto mb-2" />
-              <p className="text-sm text-navy-500">Drag and drop a file here, or click to browse</p>
+
+            <div>
+              <label className="label">Description</label>
+              <textarea
+                className="input min-h-24"
+                value={form.description}
+                onChange={(event) =>
+                  setForm({ ...form, description: event.target.value })
+                }
+                placeholder="Briefly describe this learning material..."
+              />
             </div>
-            <div className="flex gap-3 justify-end">
-              <button onClick={() => setShowUpload(false)} className="btn-secondary">Cancel</button>
-              <button onClick={() => {
-                if (!form.name.trim()) return;
-                setResources((prev) => [{ name: form.name, subject: form.subject, type: form.type, date: new Date().toISOString().split('T')[0] }, ...prev]);
-                setShowUpload(false);
-                setForm({ name: '', subject: 'Mathematics', type: 'PDF' });
-              }} className="btn-primary">Upload</button>
+
+            <div>
+              <label className="label">Class</label>
+              <select
+                className="input"
+                value={form.classId}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    classId: event.target.value,
+                    subjectId: '',
+                  })
+                }
+              >
+                <option value="">Select class</option>
+                {classes.map((classInfo) => (
+                  <option key={classInfo.id} value={classInfo.id}>
+                    {classInfo.grade} {classInfo.section}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="label">Subject</label>
+              <select
+                className="input"
+                value={form.subjectId}
+                onChange={(event) =>
+                  setForm({ ...form, subjectId: event.target.value })
+                }
+                disabled={!form.classId}
+              >
+                <option value="">
+                  {form.classId ? 'Select subject' : 'Select a class first'}
+                </option>
+                {availableSubjects.map((subject) => (
+                  <option key={subject.id} value={subject.id}>
+                    {subject.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="label">Learning Material</label>
+              <label
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  setDragging(true);
+                }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  setDragging(false);
+                  chooseFile(event.dataTransfer.files?.[0]);
+                }}
+                className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 text-center transition ${
+                  dragging
+                    ? 'border-primary-500 bg-primary-50'
+                    : 'border-navy-200 hover:bg-navy-50'
+                }`}
+              >
+                <UploadCloud className="mb-3 h-9 w-9 text-navy-500" />
+                <span className="text-sm font-semibold text-navy-700">
+                  Drag and drop your file here
+                </span>
+                <span className="mt-1 text-xs text-navy-400">
+                  Or click to browse files on your device
+                </span>
+                <span className="mt-2 text-xs text-navy-400">
+                  Maximum file size: 50 MB
+                </span>
+                <input
+                  type="file"
+                  className="hidden"
+                  onChange={(event) => {
+                    chooseFile(event.target.files?.[0]);
+                    event.target.value = '';
+                  }}
+                />
+              </label>
+
+              {selectedFile && (
+                <div className="mt-3 flex items-center gap-3 rounded-lg bg-navy-50 p-3">
+                  <FileText className="h-5 w-5 text-navy-600" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-navy-800">
+                      {selectedFile.name}
+                    </p>
+                    <p className="text-xs text-navy-400">
+                      {formatFileSize(selectedFile.size)}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedFile(null)}
+                    className="rounded p-1 text-navy-400 hover:text-error-600"
+                    title="Remove selected file"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-navy-100 pt-4">
+              <button
+                onClick={() => {
+                  setShowUpload(false);
+                  resetForm();
+                }}
+                disabled={saving}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleUpload()}
+                disabled={saving}
+                className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4" />
+                    Publish Resource
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </Modal>
@@ -378,7 +775,6 @@ export function TeacherResources() {
     </div>
   );
 }
-
 export function TeacherMessages() {
   return (
     <div className="space-y-6 animate-fade-in">

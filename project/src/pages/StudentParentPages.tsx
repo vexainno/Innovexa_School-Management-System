@@ -1,16 +1,58 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+
 import {
-  Users, BookOpen, FileText, Library, CalendarCheck, Award, FileBadge,
-  Megaphone, Download, Search, BookMarked, CheckCircle2, AlertCircle,
-  CreditCard, ChevronRight, Link2, Plus,
+  Users,
+  BookOpen,
+  FileText,
+  Library,
+  CalendarCheck,
+  Award,
+  FileBadge,
+  Megaphone,
+  Download,
+  Search,
+  BookMarked,
+  CheckCircle2,
+  AlertCircle,
+  CreditCard,
+  ChevronRight,
+  Link2,
+  Plus,
+  Loader2,
 } from 'lucide-react';
-import { PageHeader, StatCard, SectionCard, EmptyState, Avatar, ProgressBar, Modal } from '@/components/ui';
-import { useAuth } from '@/context/AuthContext';
+
 import {
-  STUDENTS, SUBJECTS, ASSESSMENTS, GRADES, ATTENDANCE, BOOKS, BOOK_REQUESTS,
-  ANNOUNCEMENTS, INVOICES, CLASSES,
+  PageHeader,
+  StatCard,
+  SectionCard,
+  EmptyState,
+  Avatar,
+  ProgressBar,
+  Modal,
+} from '@/components/ui';
+
+import { useAuth } from '@/context/AuthContext';
+
+import {
+  STUDENTS,
+  SUBJECTS,
+  ASSESSMENTS,
+  GRADES,
+  ATTENDANCE,
+  BOOKS,
+  BOOK_REQUESTS,
+  ANNOUNCEMENTS,
+  INVOICES,
+  CLASSES,
 } from '@/data/mockData';
+
 import type { Book } from '@/types';
+
+import {
+  getLearningResources,
+  type LearningResource,
+} from '@/data/learningResources';
+
 
 // --- Student Dashboard ---
 export function StudentDashboard({ onNavigate }: { onNavigate: (page: string) => void }) {
@@ -111,27 +153,155 @@ export function StudentAssignments() {
 }
 
 export function StudentResources() {
+  const { user } = useAuth();
+  const [resources, setResources] = useState<LearningResource[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  // The demo account uses the signed-in student's ID. The s1 fallback keeps
+  // the existing frontend demo usable when authentication is not connected.
+  const student = STUDENTS.find((item) => item.id === user?.id) || STUDENTS.find((item) => item.id === 's1');
+
+  const normalize = (value: string | undefined) =>
+    (value || '').replace(/\\s+/g, '').toLowerCase();
+
+  const studentClass = student
+    ? CLASSES.find((item) => {
+        const studentClassValue = normalize(student.class);
+        const gradeValue = String(item.grade || '').replace(/^grade\\s*/i, '');
+        const gradeSection = normalize(`${gradeValue}${item.section}`);
+        const className = normalize(item.name);
+        return (
+          (studentClassValue && studentClassValue === gradeSection) ||
+          (studentClassValue && studentClassValue === className)
+        );
+      })
+    : undefined;
+
+  useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      setLoading(true);
+      setError('');
+
+      try {
+        const allResources = await getLearningResources();
+        if (!active) return;
+
+        const visibleResources = allResources.filter((resource) => {
+          if (studentClass) {
+            return resource.classId === studentClass.id;
+          }
+
+          // Fallback for demo records where the student class has no matching
+          // class entry in the mock class list.
+          const targetClass = normalize(`${resource.className}${resource.section}`);
+          return targetClass !== '' && targetClass === normalize(student?.class);
+        });
+
+        setResources(
+          visibleResources.sort(
+            (a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime(),
+          ),
+        );
+      } catch (loadError) {
+        console.error('Unable to load learning resources:', loadError);
+        if (active) {
+          setError('Learning resources could not be loaded. Please refresh and try again.');
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    void load();
+
+    return () => {
+      active = false;
+    };
+  }, [student?.class, studentClass?.id]);
+
+  const handleDownload = (resource: LearningResource) => {
+    const objectUrl = URL.createObjectURL(resource.file);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = resource.fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Learning Resources" subtitle="Materials shared by your teachers." />
+      <PageHeader
+        title="Learning Resources"
+        subtitle="Materials shared by your teachers for your class."
+      />
+
       <SectionCard title="Available Resources">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[
-            { name: 'Algebra Notes — Chapter 1', subject: 'Mathematics', type: 'PDF', date: '2026-09-10' },
-            { name: 'Physics Lab Manual', subject: 'Physics', type: 'PDF', date: '2026-09-08' },
-            { name: 'Equations Worksheet', subject: 'Mathematics', type: 'DOC', date: '2026-09-12' },
-            { name: 'Newton\'s Laws Slides', subject: 'Physics', type: 'PPT', date: '2026-09-07' },
-            { name: 'Cell Biology Guide', subject: 'Biology', type: 'PDF', date: '2026-09-11' },
-            { name: 'Essay Writing Guide', subject: 'English', type: 'PDF', date: '2026-09-16' },
-          ].map((r, i) => (
-            <div key={i} className="card-hover p-5">
-              <div className="p-3 rounded-xl bg-navy-100 text-navy-700 w-fit mb-3"><FileText className="w-5 h-5" /></div>
-              <h3 className="font-semibold text-navy-800 text-sm">{r.name}</h3>
-              <p className="text-xs text-navy-400 mt-1">{r.subject} — {r.type} — {r.date}</p>
-              <button className="btn-secondary text-xs mt-3 w-full"><Download className="w-3.5 h-3.5" /> Download</button>
-            </div>
-          ))}
-        </div>
+        {loading ? (
+          <div className="flex items-center justify-center gap-3 py-12 text-sm text-navy-500">
+            <Loader2 className="w-5 h-5 animate-spin" />
+            Loading learning resources...
+          </div>
+        ) : error ? (
+          <div className="flex items-start gap-3 rounded-lg border border-error-200 bg-error-50 p-4 text-sm text-error-700">
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+            <p>{error}</p>
+          </div>
+        ) : resources.length === 0 ? (
+          <EmptyState
+            icon={<Library className="w-8 h-8" />}
+            title="No learning resources yet"
+            message="Your teachers have not shared any learning materials with your class yet. New resources will appear here when they are published."
+          />
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {resources.map((resource) => (
+              <div key={resource.id} className="card-hover flex flex-col p-5">
+                <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-navy-100 text-navy-700">
+                  <FileText className="h-5 w-5" />
+                </div>
+
+                <h3 className="text-sm font-semibold text-navy-800 break-words">
+                  {resource.title}
+                </h3>
+                {resource.description && (
+                  <p className="mt-2 text-sm text-navy-500 line-clamp-3">
+                    {resource.description}
+                  </p>
+                )}
+
+                <div className="mt-3 space-y-1 text-xs text-navy-400">
+                  <p>{resource.subjectName}</p>
+                  <p>
+                    {resource.fileType || 'File'} · {formatFileSize(resource.fileSize)}
+                  </p>
+                  <p>
+                    Shared {new Date(resource.uploadedAt).toLocaleDateString()}
+                  </p>
+                  <p>Teacher: {resource.teacherName}</p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleDownload(resource)}
+                  className="btn-secondary mt-4 w-full text-xs"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Download Resource
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </SectionCard>
     </div>
   );

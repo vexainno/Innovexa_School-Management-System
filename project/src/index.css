@@ -1,88 +1,163 @@
+
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ================================
+   BASE STYLES
+================================ */
+
 @layer base {
   * {
     @apply border-navy-100;
   }
+
   body {
     @apply bg-navy-50 text-navy-900 font-sans antialiased;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
-  h1, h2, h3, h4, h5, h6 {
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     @apply font-display;
   }
 }
 
+/* ================================
+   COMPONENT STYLES
+================================ */
+
 @layer components {
+  /* Buttons */
   .btn {
     @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
   }
+
   .btn-primary {
     @apply btn bg-navy-700 text-white hover:bg-navy-800 focus:ring-navy-500 shadow-sm;
   }
+
   .btn-secondary {
     @apply btn bg-white text-navy-700 border border-navy-200 hover:bg-navy-50 focus:ring-navy-500;
   }
+
   .btn-accent {
     @apply btn bg-accent-500 text-navy-900 hover:bg-accent-600 focus:ring-accent-400 shadow-sm;
   }
+
   .btn-danger {
     @apply btn bg-error-600 text-white hover:bg-error-700 focus:ring-error-500 shadow-sm;
   }
+
   .btn-ghost {
     @apply btn text-navy-600 hover:bg-navy-100 focus:ring-navy-300;
   }
+
+  /* Cards */
   .card {
     @apply bg-white rounded-xl shadow-card border border-navy-100;
   }
+
   .card-hover {
     @apply card transition-all duration-200 hover:shadow-card-hover hover:border-navy-200;
   }
+
+  /* Standard inputs */
   .input {
     @apply w-full px-3.5 py-2.5 rounded-lg border border-navy-200 bg-white text-navy-900 placeholder-navy-400 focus:outline-none focus:ring-2 focus:ring-navy-500 focus:border-transparent transition-all duration-200;
   }
+
   .label {
     @apply block text-sm font-medium text-navy-700 mb-1.5;
   }
+
+  /* Improved assessment form inputs */
+  .input-base {
+    @apply block w-full min-h-12 px-4 py-3 rounded-lg border border-navy-200 bg-white text-sm leading-6 text-navy-900 placeholder-navy-400 shadow-sm transition-all duration-200;
+    @apply focus:outline-none focus:ring-2 focus:ring-navy-500 focus:border-transparent;
+    @apply disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500;
+  }
+
+  textarea.input-base {
+    @apply min-h-32 resize-y leading-7;
+  }
+
+  select.input-base {
+    @apply min-h-12 cursor-pointer;
+  }
+
+  .form-label {
+    @apply block mb-2 text-sm font-semibold leading-6 text-navy-700;
+  }
+
+  /* Badges */
   .badge {
     @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium;
   }
-  .badge-success { @apply badge bg-success-100 text-success-700; }
-  .badge-warning { @apply badge bg-warning-100 text-warning-700; }
-  .badge-error { @apply badge bg-error-100 text-error-700; }
-  .badge-info { @apply badge bg-navy-100 text-navy-700; }
-  .badge-accent { @apply badge bg-accent-100 text-accent-700; }
+
+  .badge-success {
+    @apply badge bg-success-100 text-success-700;
+  }
+
+  .badge-warning {
+    @apply badge bg-warning-100 text-warning-700;
+  }
+
+  .badge-error {
+    @apply badge bg-error-100 text-error-700;
+  }
+
+  .badge-info {
+    @apply badge bg-navy-100 text-navy-700;
+  }
+
+  .badge-accent {
+    @apply badge bg-accent-100 text-accent-700;
+  }
+
+  /* Tables */
   .table-base {
     @apply w-full text-left text-sm;
   }
+
   .table-base thead th {
     @apply px-4 py-3 bg-navy-50 text-navy-600 font-semibold text-xs uppercase tracking-wider border-b border-navy-200;
   }
+
   .table-base tbody td {
     @apply px-4 py-3 border-b border-navy-100 text-navy-800;
   }
+
   .table-base tbody tr {
     @apply transition-colors hover:bg-navy-50;
   }
 }
 
-/* Scrollbar */
+/* ================================
+   SCROLLBAR
+================================ */
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
   background: #b8cce9;
   border-radius: 4px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: #8ba9d8;
 }
