@@ -874,7 +874,7 @@ export default function TeacherAssessmentMarking() {
               <div>
                 <h2 className="text-lg font-bold text-navy-800">Student Assessment Roster</h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  {selectedAssessment.title} · {selectedClass?.name} ·{' '}
+                  {selectedAssessment?.title} · {selectedClass?.name} ·{' '}
                   {SUBJECTS.find((item) => item.id === selectedSubjectId)?.name}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">

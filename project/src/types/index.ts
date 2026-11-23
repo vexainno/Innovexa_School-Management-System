@@ -220,3 +220,324 @@ export interface NavItem {
   icon: string;
   page: string;
 }
+
+// --- Cross-portal shared entities ---
+
+export interface AcademicYear {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  status: 'planning' | 'active' | 'completed';
+  terms: AcademicTerm[];
+}
+
+export interface AcademicTerm {
+  id: string;
+  name: string;
+  yearId: string;
+  startDate: string;
+  endDate: string;
+  status: 'upcoming' | 'active' | 'completed';
+}
+
+export type CalendarCategory =
+  | 'term'
+  | 'examination'
+  | 'holiday'
+  | 'meeting'
+  | 'sports'
+  | 'cultural'
+  | 'graduation'
+  | 'deadline'
+  | 'development'
+  | 'other';
+
+export interface SchoolEvent {
+  id: string;
+  title: string;
+  description: string;
+  category: CalendarCategory;
+  startDate: string;
+  endDate: string;
+  startTime?: string;
+  endTime?: string;
+  venue: string;
+  audience: string;
+  targetClasses?: string[];
+  status: 'draft' | 'published' | 'cancelled';
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface TimetableEntry {
+  id: string;
+  yearId: string;
+  termId: string;
+  classId: string;
+  section: string;
+  subjectId: string;
+  subjectName: string;
+  teacherId: string;
+  teacherName: string;
+  room: string;
+  day: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday';
+  startTime: string;
+  endTime: string;
+  kind: 'lesson' | 'break' | 'lunch' | 'assembly';
+  status: 'draft' | 'published';
+}
+
+export interface TeacherSubstitution {
+  id: string;
+  originalTeacherId: string;
+  originalTeacherName: string;
+  substituteTeacherId: string;
+  substituteTeacherName: string;
+  classId: string;
+  className: string;
+  subjectName: string;
+  date: string;
+  period: string;
+  reason: string;
+  status: 'pending' | 'published';
+}
+
+export type IncidentStatus =
+  | 'reported'
+  | 'under_review'
+  | 'investigation'
+  | 'awaiting_decision'
+  | 'action_assigned'
+  | 'resolved'
+  | 'closed';
+
+export interface IncidentReport {
+  id: string;
+  studentId: string;
+  studentName: string;
+  class: string;
+  date: string;
+  time: string;
+  location: string;
+  category: string;
+  description: string;
+  reportedBy: string;
+  witnesses: string;
+  severity: 'minor' | 'moderate' | 'major';
+  status: IncidentStatus;
+  action?: string;
+  actionAssignedBy?: string;
+  parentNotified: boolean;
+  history: { status: IncidentStatus; note: string; by: string; at: string }[];
+}
+
+export type DisciplineAction =
+  | 'Verbal Warning'
+  | 'Written Warning'
+  | 'Parent Meeting'
+  | 'Detention'
+  | 'Suspension Recommendation'
+  | 'Restorative Action'
+  | 'Other';
+
+export interface StudentActivity {
+  id: string;
+  name: string;
+  category: 'club' | 'sports' | 'leadership' | 'cultural';
+  coordinator: string;
+  meetingDay: string;
+  members: number;
+  status: 'active' | 'inactive';
+}
+
+export type FeeCategory =
+  | 'tuition'
+  | 'registration'
+  | 'examination'
+  | 'library'
+  | 'technology'
+  | 'activity'
+  | 'other';
+
+export interface FeeStructure {
+  id: string;
+  academicYear: string;
+  term: string;
+  gradeLevel: string;
+  category: FeeCategory;
+  description: string;
+  amount: number;
+  dueDate: string;
+}
+
+export interface FeeItem {
+  description: string;
+  category: FeeCategory;
+  amount: number;
+}
+
+export type InvoiceStatus =
+  | 'draft'
+  | 'issued'
+  | 'partial'
+  | 'paid'
+  | 'overdue'
+  | 'cancelled';
+
+export interface Invoice {
+  id: string;
+  invoiceNumber: string;
+  studentId: string;
+  studentName: string;
+  className: string;
+  academicYear: string;
+  term: string;
+  items: FeeItem[];
+  amount: number;
+  amountPaid: number;
+  dueDate: string;
+  issueDate: string;
+  status: InvoiceStatus;
+}
+
+export interface Expense {
+  id: string;
+  category: string;
+  description: string;
+  amount: number;
+  date: string;
+  recipient: string;
+  method: 'bank' | 'cash' | 'mobile_money';
+  reference: string;
+  approved: boolean;
+}
+
+export interface Scholarship {
+  id: string;
+  name: string;
+  type: 'merit' | 'need' | 'sport' | 'staff';
+  discountPercent: number;
+  studentId: string;
+  studentName: string;
+  approved: boolean;
+  expires: string;
+}
+
+export type PlatformSubscriptionStatus =
+  | 'trial'
+  | 'active'
+  | 'past_due'
+  | 'expired'
+  | 'suspended'
+  | 'cancelled';
+
+export interface SubscriptionPlan {
+  id: string;
+  name: string;
+  priceMonthly: number;
+  priceYearly: number;
+  studentLimit: number;
+  staffLimit: number;
+  storageGb: number;
+}
+
+export interface SchoolSubscription {
+  schoolId: string;
+  planId: string;
+  status: PlatformSubscriptionStatus;
+  startedAt: string;
+  renewsAt: string;
+  expiresAt: string;
+}
+
+export interface PlatformSchool {
+  id: string;
+  name: string;
+  city: string;
+  country: string;
+  principalName: string;
+  email: string;
+  phone: string;
+  students: number;
+  staff: number;
+  status: 'active' | 'suspended' | 'trial';
+  subscription: SchoolSubscription;
+}
+
+export interface PlatformUserRecord {
+  id: string;
+  name: string;
+  email: string;
+  schoolId: string | null;
+  role: Role;
+  status: 'active' | 'inactive' | 'locked';
+}
+
+export interface AuditEntry {
+  id: string;
+  user: string;
+  school: string;
+  action: string;
+  module: string;
+  timestamp: string;
+  status: 'success' | 'failed';
+  recordRef: string;
+}
+
+export type NotificationCategory =
+  | 'assessment'
+  | 'gradebook'
+  | 'results'
+  | 'timetable'
+  | 'calendar'
+  | 'attendance'
+  | 'finance'
+  | 'library'
+  | 'discipline'
+  | 'counseling'
+  | 'registration'
+  | 'platform'
+  | 'general';
+
+export interface AppNotification {
+  id: string;
+  recipientRoles: Role[];
+  recipientUserIds?: string[];
+  title: string;
+  message: string;
+  category: NotificationCategory;
+  relatedPage?: string;
+  createdAt: string;
+  readBy: string[];
+}
+
+export interface GuardianLink {
+  id: string;
+  guardianUserId: string;
+  guardianName: string;
+  studentId: string;
+  studentName: string;
+  relationship: string;
+  status: 'pending' | 'linked' | 'revoked';
+  code: string;
+  codeExpires: string;
+  createdAt: string;
+}
+
+export interface LessonPlan {
+  id: string;
+  teacherId: string;
+  teacherName: string;
+  subjectName: string;
+  classId: string;
+  className: string;
+  week: string;
+  topic: string;
+  objectives: string;
+  methods: string;
+  materials: string;
+  homework: string;
+  completed: boolean;
+  createdAt: string;
+}
