@@ -275,6 +275,7 @@ export interface TimetableEntry {
   yearId: string;
   termId: string;
   classId: string;
+  className?: string;
   section: string;
   subjectId: string;
   subjectName: string;
@@ -385,7 +386,7 @@ export type InvoiceStatus =
   | 'overdue'
   | 'cancelled';
 
-export interface Invoice {
+export interface DetailedInvoice {
   id: string;
   invoiceNumber: string;
   studentId: string;
