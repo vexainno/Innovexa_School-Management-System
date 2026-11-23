@@ -230,5 +230,3 @@ export function convertLegacyPayments(): Payment[] {
 }
 
 export const LEGACY_INVOICE_COUNT = INVOICES.length;
-
-export type { InvoiceVersion2 };

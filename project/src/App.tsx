@@ -1,6 +1,7 @@
 
 import { useState } from 'react';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { SchoolDataProvider } from '@/context/SchoolDataContext';
 import { AppLayout } from '@/components/AppLayout';
 import { LoginPage } from '@/components/LoginPage';
 
@@ -136,6 +137,58 @@ import {
 // Counselor Support Notifications
 import { CounselorSupportNotifications } from '@/pages/CounselorSupportNotification';
 
+// VP Calendar, Timetable & Ops
+import {
+  VPSchoolCalendar,
+  VPTimetableBuilder,
+  VPPublishedTimetables,
+  VPSubstitutions,
+  VPDutyRoster,
+} from '@/pages/VPOperationsPages';
+
+// Registrar Extended
+import {
+  RegistrarRegisterStudent,
+  RegistrarBulkImport,
+  RegistrarPromotion,
+  RegistrarWithdrawal,
+  RegistrarGuardianLinks,
+} from '@/pages/RegistrarWorkflowPages';
+
+// Academic Officer Extended
+import {
+  AcademicYearsTerms,
+  AcademicTeacherAssignments,
+  AcademicGradingConfig,
+  AcademicGradebookProcessing,
+} from '@/pages/AcademicOfficerPages';
+
+// Teacher Extended
+import { TeacherLessonPlans, TeacherTimetable } from '@/pages/TeacherWorkflowPages';
+
+// Student Extended
+import { StudentTimetable, StudentSchoolCalendar } from '@/pages/StudentWorkflowPages';
+
+// Finance Extended
+import {
+  FinanceFeeStructures,
+  FinanceScholarships,
+  FinanceExpenses,
+} from '@/pages/FinanceWorkflowPages';
+
+// Dean Extended
+import { DeanIncidentReports, DeanInvestigations } from '@/pages/DeanWorkflowPages';
+
+// Super Admin Extended
+import {
+  SuperAdminSchools,
+  SuperAdminSubscriptions,
+  SuperAdminAnalytics,
+} from '@/pages/SuperAdminWorkflowPages';
+
+// Parent Extended
+import { ParentSchoolCalendar } from '@/pages/ParentWorkflowPages';
+
 import type { Role } from '@/types';
 
 type PageComponent = (props: {
@@ -158,6 +211,11 @@ const ROUTES: Record<Role, Record<string, PageComponent>> = {
   vice_principal: {
     dashboard: VicePrincipalDashboard,
     operations: VPOperations,
+    'school-calendar': VPSchoolCalendar,
+    'timetable-builder': VPTimetableBuilder,
+    'published-timetables': VPPublishedTimetables,
+    substitutions: VPSubstitutions,
+    'duty-roster': VPDutyRoster,
     'class-management': VPClassManagement,
     attendance: VPAttendance,
     staff: VPStaff,
@@ -168,6 +226,8 @@ const ROUTES: Record<Role, Record<string, PageComponent>> = {
 
   dean: {
     dashboard: DeanDashboard,
+    'incident-reports': DeanIncidentReports,
+    investigations: DeanInvestigations,
     discipline: DeanDiscipline,
     attendance: DeanAttendance,
     activities: DeanActivities,
@@ -177,16 +237,25 @@ const ROUTES: Record<Role, Record<string, PageComponent>> = {
   registrar: {
     dashboard: RegistrarDashboard,
     admissions: RegistrarAdmissions,
+    'register-student': RegistrarRegisterStudent,
     students: RegistrarStudents,
+    'bulk-import': RegistrarBulkImport,
     classes: RegistrarClasses,
+    promotion: RegistrarPromotion,
+    withdrawal: RegistrarWithdrawal,
     guardians: RegistrarGuardians,
+    'guardian-links': RegistrarGuardianLinks,
     transfers: RegistrarTransfers,
     documents: RegistrarDocuments,
   },
 
   academic_officer: {
     dashboard: AcademicDashboard,
+    'academic-years': AcademicYearsTerms,
     examinations: AcademicExaminations,
+    'teacher-assignments': AcademicTeacherAssignments,
+    'grading-config': AcademicGradingConfig,
+    'gradebook-processing': AcademicGradebookProcessing,
     'submitted-gradebooks': AcademicSubmittedGradebooks,
     'approved-grades': AcademicApprovedGrades,
     'results-release': AcademicResultsRelease,
@@ -200,6 +269,8 @@ const ROUTES: Record<Role, Record<string, PageComponent>> = {
     subjects: TeacherSubjects,
     students: TeacherStudents,
     attendance: TeacherAttendance,
+    timetable: TeacherTimetable,
+    'lesson-plans': TeacherLessonPlans,
 
     // Teacher assessment workflows
     assignments: TeacherAssessmentMarking,
@@ -225,10 +296,13 @@ const ROUTES: Record<Role, Record<string, PageComponent>> = {
 
   finance: {
     dashboard: FinanceDashboard,
+    'fee-structures': FinanceFeeStructures,
     fees: FinanceFees,
     invoices: FinanceInvoices,
     payments: FinancePayments,
     outstanding: FinanceOutstanding,
+    scholarships: FinanceScholarships,
+    expenses: FinanceExpenses,
     receipts: FinanceReceipts,
     reports: FinanceReports,
   },
@@ -244,6 +318,9 @@ const ROUTES: Record<Role, Record<string, PageComponent>> = {
 
   super_admin: {
     dashboard: SuperAdminDashboard,
+    schools: SuperAdminSchools,
+    subscriptions: SuperAdminSubscriptions,
+    analytics: SuperAdminAnalytics,
     users: SuperAdminUsers,
     roles: SuperAdminRoles,
     recovery: SuperAdminRecovery,
@@ -257,6 +334,8 @@ const ROUTES: Record<Role, Record<string, PageComponent>> = {
     dashboard: StudentPortalDashboard,
     classes: StudentClasses,
     subjects: StudentSubjects,
+    timetable: StudentTimetable,
+    'school-calendar': StudentSchoolCalendar,
     assignments: StudentAssignments,
     resources: StudentResources,
     attendance: StudentAttendanceCalendar,
@@ -273,6 +352,7 @@ const ROUTES: Record<Role, Record<string, PageComponent>> = {
     results: ParentResults,
     attendance: ParentAttendance,
     'report-card': ParentReportCard,
+    'school-calendar': ParentSchoolCalendar,
     fees: ParentFees,
     library: ParentLibrary,
     announcements: ParentAnnouncements,
@@ -307,7 +387,9 @@ function AppContent() {
 function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <SchoolDataProvider>
+        <AppContent />
+      </SchoolDataProvider>
     </AuthProvider>
   );
 }
