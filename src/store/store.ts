@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react';
 import type { Role, User } from '@/types';
 import { buildFreshSchool, buildSeed, feeTotal, roomFor, SEED_VERSION, teacherTotal, todayISO } from './seed';
 import type {
-  Payment, Question, Submission, Task,
+  ClassRegister, Payment, Question, Submission, Task,
   Account, DayBlock, MobileMoneyWallet, WeekDay,
   Announcement, AppNotification, Audience, BatchStatus, Book, Expense, Gradebook, GradingConfig, Incident,
   MarkRow, ReportTemplate, SchoolState, SchoolStudent, StaffAttendance, Substitution,
@@ -220,6 +220,8 @@ const hash = (str: string) => {
   return (h >>> 0) % 1000;
 };
 export function studentAttendance(studentId: string, date: string): AttStatus {
+  const reg = state.classRegisters?.find((r) => r.date === date && r.marks[studentId]);
+  if (reg) return reg.marks[studentId];
   const h = hash(`${studentId}|${date}`);
   const chronic = hash(studentId) < 60;
   if (h < (chronic ? 140 : 45)) return 'absent';
@@ -604,6 +606,22 @@ export const actions = {
     update((d) => notify(d, { title: `Financial report submitted — ${title}`, body: `${by} submitted the report for your review.`, link: 'financial-overview', toRoles: ['principal'] }));
   },
 
+  /* Class attendance */
+  saveClassRegister(r: Omit<ClassRegister, 'id' | 'recordedAt'>, teacherName: string) {
+    update((d) => {
+      d.classRegisters ??= [];
+      const i = d.classRegisters.findIndex((x) => x.date === r.date && x.grade === r.grade && x.section === r.section);
+      const rec: ClassRegister = { ...r, id: i >= 0 ? d.classRegisters[i].id : uid('reg'), recordedAt: now() };
+      if (i >= 0) d.classRegisters[i] = rec; else d.classRegisters.push(rec);
+      const absent = Object.entries(r.marks).filter(([, v]) => v === 'absent').map(([k]) => k);
+      notify(d, { title: `Attendance recorded — ${className(r.grade, r.section)}`, body: `${teacherName}: ${Object.keys(r.marks).length - absent.length} present or late, ${absent.length} absent (${fmtDate(r.date)}).`, link: 'student-attendance', toRoles: ['vice_principal'] });
+      for (const sid of absent) {
+        const st = d.students.find((x) => x.id === sid);
+        if (st) notify(d, { title: `Absence — ${st.name}`, body: `${st.name} was marked absent from ${className(r.grade, r.section)} on ${fmtDate(r.date)}.`, link: 'attendance', toStudentIds: [sid] });
+      }
+    });
+  },
+
   /* VP / staff */
   setStaffAttendance(rec: StaffAttendance) {
     update((d) => {
@@ -938,7 +956,9 @@ export const actions = {
       const m = autoMark(t, sub.answers);
       sub.autoScore = m.total;
       sub.perQuestion = m.per;
-      if (t.kind === 'quiz' && !needsManualMarking(t)) { sub.status = 'graded'; sub.score = m.total; sub.gradedAt = now(); }
+      // An auto-marked question answered only with an uploaded file goes to the teacher instead.
+      const fileOnly = t.questions.some((q) => isAutoMarked(q) && !(sub.answers[q.id] ?? '').trim() && sub.files.some((f) => f.name.startsWith(`${q.id}__`)));
+      if (t.kind === 'quiz' && !needsManualMarking(t) && !fileOnly) { sub.status = 'graded'; sub.score = m.total; sub.gradedAt = now(); }
       else sub.status = 'submitted';
       const st = d.students.find((x) => x.id === sub.studentId);
       notify(d, { title: `${t.kind === 'quiz' ? 'Quiz' : 'Assignment'} submitted — ${st?.name}`, body: `${t.title}${sub.late ? ' (late)' : ''}.`, toUserIds: [t.teacherId], link: `submissions:${t.id}` });

@@ -17,7 +17,7 @@ export type WorkflowGradebook = GradebookSubmission & {
   fileSize?: number;
   fileType?: string;
   fileDataUrl?: string;
-  session: string;
+  section?: string;
   classId: string;
   subjectId: string;
   teacherId: string;
@@ -26,7 +26,7 @@ export type WorkflowGradebook = GradebookSubmission & {
 };
 
 export type WorkflowAttendance = AttendanceRecord & {
-  session: 'morning' | 'afternoon' | 'evening';
+  section?: string;
   recordedBy: string;
   sponsorId: string;
   sponsorName: string;
@@ -61,7 +61,6 @@ const save = <T,>(key: string, value: T) => localStorage.setItem(key, JSON.strin
 export function getGradebooks(): WorkflowGradebook[] {
   return safeParse<WorkflowGradebook[]>(WORKFLOW_KEYS.gradebooks, GRADEBOOK_SUBMISSIONS.map((s, i) => ({
     ...s,
-    session: 'morning',
     classId: CLASSES.find(c => c.name.replace(' - Section ', '') === s.className || c.name.includes(s.className.replace('Grade ', 'Grade ')))?.id || (s.className.includes('11') ? 'c5' : s.className.includes('10') ? 'c4' : s.className.includes('12') ? 'c6' : 'c5'),
     subjectId: SUBJECTS.find(sub => sub.name === s.subjectName && sub.className === s.className)?.id || 'sub1',
     teacherId: i === 2 ? 'u13' : 'u6',
@@ -76,7 +75,6 @@ export function setGradebooks(value: WorkflowGradebook[]) {
 export function getAttendance(): WorkflowAttendance[] {
   return safeParse<WorkflowAttendance[]>(WORKFLOW_KEYS.attendance, ATTENDANCE.map((a) => ({
     ...a,
-    session: 'morning',
     recordedBy: a.classId === 'c5' ? 'u6' : 'u6',
     sponsorId: a.classId === 'c5' ? 'u6' : 'u6',
     sponsorName: 'Mr. Peter Wleh',

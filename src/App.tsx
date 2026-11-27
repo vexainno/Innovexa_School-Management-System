@@ -192,7 +192,7 @@ const ROUTES: Record<Role, Record<string, Page>> = {
     subjects: L(teacher, 't', 'TeacherSubjects'),
     timetable: L(teacher, 't', 'TeacherTimetable'),
     'student-lists': L(teacher, 't', 'StudentLists'),
-    attendance: L(oldTeacher, 'ot', 'TeacherAttendance'),
+    attendance: L(teacher, 't', 'TeacherAttendance'),
     assignments: L(teacherAssess, 'ta', 'TeacherAssignmentsPage'),
     'online-assessments': L(teacherAssess, 'ta', 'OnlineAssessmentsPage'),
     'assessment-questions': L(teacherAssess, 'ta', 'QuestionBank'),

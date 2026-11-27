@@ -6,13 +6,13 @@ import {
   Clock, Save, Plus, Upload, CalendarDays, Pencil, X, CalendarClock, UploadCloud, Trash2, Loader2, Download,
 } from 'lucide-react';
 
-import { PageHeader, StatCard, SectionCard, EmptyState, Avatar, Modal } from '@/components/ui';
+import { PageHeader, StatCard, SectionCard, EmptyState, Modal } from '@/components/ui';
 import {
   CLASSES, SUBJECTS, STUDENTS, ASSESSMENTS, } from '@/data/mockData';
 import type { Assessment } from '@/types';
 import {
   getTeacherClasses, getTeacherSubjects, getSubjectAssignments,
-  getStudentsForClass, getAttendance, setAttendance, type WorkflowAttendance, } from '@/data/workflow';
+  getStudentsForClass, } from '@/data/workflow';
 
 import {
   getCounselorCases, createCounselorCase, updateCounselorCase,
@@ -175,26 +175,6 @@ export function TeacherDashboard({ onNavigate }: { onNavigate: (page: string) =>
 
 
 
-
-export function TeacherAttendance() {
-  const classes = getTeacherClasses('u6');
-  const [selectedClass, setSelectedClass] = useState(classes[0]?.id || '');
-  const [session, setSession] = useState<'morning'|'afternoon'|'evening'>('morning');
-  const [records, setRecords] = useState<WorkflowAttendance[]>(getAttendance());
-  const students = selectedClass ? getStudentsForClass(selectedClass) : [];
-  const today = new Date().toISOString().slice(0,10);
-  const existing = records.filter(r => r.classId === selectedClass && r.date === today && r.session === session);
-  const [status, setStatus] = useState<Record<string, WorkflowAttendance['status']>>(() => Object.fromEntries(existing.map(r=>[r.studentId,r.status])));
-  const setAll = (value: WorkflowAttendance['status']) => setStatus(Object.fromEntries(students.map(s=>[s.id,value])));
-  const saveNow = () => {
-    const assignment = classes.find(c=>c.id===selectedClass);
-    if (!assignment) return;
-    const kept = records.filter(r => !(r.classId===selectedClass && r.date===today && r.session===session));
-    const next = students.map(s => ({ id:`att-${today}-${selectedClass}-${session}-${s.id}`, studentId:s.id, studentName:s.name, classId:selectedClass, className:`${assignment.grade}${assignment.section}`, date:today, status:status[s.id] || 'present', session, recordedBy:'u6', sponsorId:'u6', sponsorName:'Mr. Peter Wleh', submittedAt:new Date().toISOString() } as WorkflowAttendance));
-    const all=[...kept,...next]; setRecords(all); setAttendance(all); window.alert('Attendance saved and sent to the Principal and Vice Principal.');
-  };
-  return <div className="space-y-6 animate-fade-in"><PageHeader title="Attendance" subtitle="The assigned class sponsor is the only teacher allowed to submit attendance for that class and session." action={<button onClick={saveNow} className="btn-primary"><Save className="w-4 h-4"/> Save Attendance</button>}/><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="label">Class</label><select className="input" value={selectedClass} onChange={e=>{setSelectedClass(e.target.value);setStatus({});}}>{classes.map(c=><option key={c.id} value={c.id}>{c.grade}{c.section} — {c.name}</option>)}</select></div><div><label className="label">Session</label><select className="input" value={session} onChange={e=>{setSession(e.target.value as 'morning'|'afternoon'|'evening');setStatus({});}}><option value="morning">Morning</option><option value="afternoon">Afternoon</option><option value="evening">Evening</option></select></div></div><SectionCard title={`${classes.find(c=>c.id===selectedClass)?.grade}${classes.find(c=>c.id===selectedClass)?.section} — ${session} — ${today}`} action={<div className="flex gap-2"><button className="btn-secondary text-xs" onClick={()=>setAll('present')}>Mark All Present</button><button className="btn-secondary text-xs" onClick={()=>setAll('absent')}>Mark All Absent</button></div>}><div className="space-y-2">{students.map(s=>{const v=status[s.id]||'present';return <div key={s.id} className="flex items-center gap-3 p-3 rounded-lg border border-navy-100"><Avatar name={s.name} color={s.photoColor} size="sm"/><span className="text-sm font-medium text-navy-800 flex-1">{s.name}</span><div className="flex flex-wrap gap-1"><button onClick={()=>setStatus(p=>({...p,[s.id]:'present'}))} className={v==='present'?'badge-success':'btn-secondary text-xs'}>Present</button><button onClick={()=>setStatus(p=>({...p,[s.id]:'absent'}))} className={v==='absent'?'badge-error':'btn-secondary text-xs'}>Absent</button><button onClick={()=>setStatus(p=>({...p,[s.id]:'excused'}))} className={v==='excused'?'badge-info':'btn-secondary text-xs'}>Excuse</button><button onClick={()=>setStatus(p=>({...p,[s.id]:'late'}))} className={v==='late'?'badge-warning':'btn-secondary text-xs'}>Late</button></div></div>})}</div></SectionCard></div>;
-}
 
 export function TeacherAssignments() {
   const [showCreate, setShowCreate] = useState(false);

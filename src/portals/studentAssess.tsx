@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, CheckCircle2, Clock, FileText, Paperclip, Send, Timer, Trash2, Upload } from 'lucide-react';
+import { ArrowDown, ArrowUp, CheckCircle2, Clock, FileText, Send, Timer, Upload } from 'lucide-react';
 import { actions, studentIdForUser, taskStateFor, TASK_STATE_LABEL, useSchool } from '@/store/store';
 import type { Question, Submission, SubmittedFile, Task } from '@/store/types';
-import { resizeImage } from '@/components/BookCover';
+import { FileDrop, FileList, toSubmittedFile } from '@/components/Attachments';
 import { Card, Dialog, Header, Notice, Pill, Stat, Table, Tabs } from '@/components/kit';
 import { useMe } from './shared';
 
@@ -20,17 +20,6 @@ function useMyTasks(kind: Task['kind']) {
   return { s, sid, tasks, subOf };
 }
 
-async function toSubmittedFile(f: File): Promise<SubmittedFile> {
-  if (f.type.startsWith('image/')) {
-    try { return { name: f.name, size: f.size, type: 'image/jpeg', dataUrl: await resizeImage(f, 1400) }; } catch { /* fall through */ }
-  }
-  if (f.size <= 700_000) {
-    const dataUrl = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsDataURL(f); });
-    return { name: f.name, size: f.size, type: f.type || 'application/octet-stream', dataUrl };
-  }
-  return { name: f.name, size: f.size, type: f.type || 'application/octet-stream' };
-}
-
 function Score({ t, sub }: { t: Task; sub?: Submission }) {
   if (!sub || sub.status !== 'graded' || !t.resultsReleased) return null;
   return (
@@ -38,6 +27,16 @@ function Score({ t, sub }: { t: Task; sub?: Submission }) {
       <p className="text-sm text-success-800">Your mark</p>
       <p className="text-2xl font-bold text-success-800">{sub.score} / {t.maxMarks}</p>
       {sub.feedback && <p className="text-sm text-navy-700 mt-1"><b>Teacher's feedback:</b> {sub.feedback}</p>}
+    </div>
+  );
+}
+
+function QuestionPaper({ t }: { t: Task }) {
+  if (!t.attachments?.length) return null;
+  return (
+    <div className="mt-3 rounded-xl border border-navy-200 p-4">
+      <p className="text-sm font-semibold text-navy-900 mb-2 flex items-center gap-2"><FileText className="w-4 h-4" /> {t.kind === 'quiz' ? 'Test paper' : 'Assignment file'} from your teacher</p>
+      <FileList files={t.attachments} />
     </div>
   );
 }
@@ -86,19 +85,12 @@ function AssignmentDialog({ task: t, studentId, onClose }: { task: Task; student
   const editable = (state === 'open' || state === 'in_progress' || state === 'overdue');
   const [text, setText] = useState(sub?.text ?? '');
   const [files, setFiles] = useState<SubmittedFile[]>(sub?.files ?? []);
-  const [busy, setBusy] = useState(false);
+  const busy = false;
   const [confirm, setConfirm] = useState(false);
   const [saved, setSaved] = useState('');
   const allowText = t.submissionType !== 'file';
   const allowFiles = t.submissionType !== 'text';
   const ensure = () => sub?.id ?? actions.startSubmission(t.id, studentId);
-  const add = async (list: FileList | null) => {
-    if (!list) return;
-    setBusy(true);
-    const next = [...files];
-    for (const f of Array.from(list)) next.push(await toSubmittedFile(f));
-    setFiles(next); setBusy(false); setSaved('');
-  };
   const move = (i: number, d: number) => { const n = [...files]; const [x] = n.splice(i, 1); n.splice(i + d, 0, x); setFiles(n); };
   const saveDraft = () => { const id = ensure(); actions.saveSubmission(id, { text, files }); setSaved('Draft saved.'); };
   const submit = () => { const id = ensure(); actions.saveSubmission(id, { text, files }); actions.submitSubmission(id); setConfirm(false); };
@@ -110,7 +102,8 @@ function AssignmentDialog({ task: t, studentId, onClose }: { task: Task; student
       <button type="button" className="btn-primary" disabled={empty || busy} onClick={() => setConfirm(true)}><Send className="w-4 h-4" /> Submit assignment</button>
     </> : undefined}>
       <div className="flex flex-wrap gap-2 mb-3"><Pill tone={stateTone(state)}>{TASK_STATE_LABEL[state]}</Pill><Pill>{t.subject}</Pill><Pill>{t.maxMarks} marks</Pill><Pill tone={state === 'overdue' ? 'error' : 'navy'}>Due {fmtDT(t.closesAt)}</Pill></div>
-      <div className="rounded-xl bg-navy-50 p-4 text-sm text-navy-800 whitespace-pre-line">{t.instructions}</div>
+      {t.instructions && <div className="rounded-xl bg-navy-50 p-4 text-sm text-navy-800 whitespace-pre-line">{t.instructions}</div>}
+      <QuestionPaper t={t} />
       {state === 'overdue' && <div className="mt-3"><Notice tone="warning">The deadline has passed. Your teacher still accepts this work, but it will be marked late.</Notice></div>}
       {state === 'missed' && <div className="mt-3"><Notice tone="error">This assignment is closed and was not submitted.</Notice></div>}
       {sub && sub.status !== 'in_progress' && <div className="mt-3"><Notice tone="success"><CheckCircle2 className="inline w-4 h-4 mr-1" /> Submitted {sub.submittedAt && fmtDT(sub.submittedAt)}{sub.late ? ' (late)' : ''}. {sub.status === 'graded' && t.resultsReleased ? '' : 'Your teacher will mark it and release the result.'}</Notice></div>}
@@ -123,27 +116,17 @@ function AssignmentDialog({ task: t, studentId, onClose }: { task: Task; student
       )}
       {allowFiles && (editable || files.length > 0) && (
         <div className="mt-4">
-          <span className="label">Attachments {editable && '(PDF, Word, or photos of handwritten pages)'}</span>
-          {editable && (
-            <label className="flex flex-col items-center justify-center gap-1 p-6 border-2 border-dashed border-navy-200 rounded-xl hover:bg-navy-50 cursor-pointer">
-              <Upload className="w-6 h-6 text-navy-500" />
-              <span className="text-sm font-medium text-navy-700">{busy ? 'Adding…' : 'Add files or take photos'}</span>
-              <input type="file" multiple accept="image/*,.pdf,.doc,.docx" capture="environment" className="sr-only" onChange={(e) => { void add(e.target.files); e.target.value = ''; }} />
-            </label>
+          <span className="label">Your files {editable && '— Word, PDF, PowerPoint, Excel or photos of handwritten pages'}</span>
+          {editable && <FileDrop label="Upload your answer" onAdd={(f) => { setFiles([...files, ...f]); setSaved(''); }} />}
+          {editable && <label className="btn-ghost text-sm mt-2 cursor-pointer sm:hidden"><Upload className="w-4 h-4" /> Take a photo<input type="file" accept="image/*" capture="environment" className="sr-only" onChange={async (e) => { const f = e.target.files?.[0]; if (f) setFiles([...files, await toSubmittedFile(f)]); e.target.value = ''; }} /></label>}
+          <div className="mt-3"><FileList files={files} onRemove={editable ? (i) => setFiles(files.filter((_, j) => j !== i)) : undefined} /></div>
+          {editable && files.length > 1 && (
+            <div className="mt-2 text-xs text-navy-500 flex flex-wrap items-center gap-2">Page order:
+              {files.map((f, i) => <span key={i} className="inline-flex items-center gap-0.5 rounded border border-navy-100 px-1.5 py-0.5">{i + 1}
+                <button type="button" aria-label="Move earlier" className="p-0.5 disabled:opacity-30" disabled={i === 0} onClick={() => move(i, -1)}><ArrowUp className="w-3 h-3" /></button>
+                <button type="button" aria-label="Move later" className="p-0.5 disabled:opacity-30" disabled={i === files.length - 1} onClick={() => move(i, 1)}><ArrowDown className="w-3 h-3" /></button></span>)}
+            </div>
           )}
-          <div className="grid sm:grid-cols-3 gap-3 mt-3">
-            {files.map((f, i) => (
-              <div key={i} className="rounded-lg border border-navy-100 p-2">
-                {f.dataUrl && f.type.startsWith('image/') ? <img src={f.dataUrl} alt={f.name} className="w-full h-32 object-cover rounded" /> : <div className="h-32 rounded bg-navy-50 flex items-center justify-center"><FileText className="w-8 h-8 text-navy-400" /></div>}
-                <p className="text-xs truncate mt-1">Page {i + 1}: {f.name}</p>
-                {editable && <div className="flex gap-1 mt-1">
-                  <button type="button" aria-label="Move earlier" className="p-1 rounded hover:bg-navy-50 disabled:opacity-30" disabled={i === 0} onClick={() => move(i, -1)}><ArrowUp className="w-3.5 h-3.5" /></button>
-                  <button type="button" aria-label="Move later" className="p-1 rounded hover:bg-navy-50 disabled:opacity-30" disabled={i === files.length - 1} onClick={() => move(i, 1)}><ArrowDown className="w-3.5 h-3.5" /></button>
-                  <button type="button" aria-label="Remove" className="p-1 rounded hover:bg-error-50 text-error-600 ml-auto" onClick={() => setFiles(files.filter((_, j) => j !== i))}><Trash2 className="w-3.5 h-3.5" /></button>
-                </div>}
-              </div>
-            ))}
-          </div>
         </div>
       )}
       <Dialog open={confirm} onClose={() => setConfirm(false)} title="Submit assignment?" footer={<><button type="button" className="btn-secondary" onClick={() => setConfirm(false)}>Not yet</button><button type="button" className="btn-primary" onClick={submit}>Submit</button></>}>
@@ -207,7 +190,7 @@ export function StudentQuizzesPage() {
         </Table>
       </Card>
       <Dialog open={!!confirmStart} onClose={() => setConfirmStart(null)} title={confirmStart?.title ?? ''} footer={<><button type="button" className="btn-secondary" onClick={() => setConfirmStart(null)}>Not now</button><button type="button" className="btn-primary" onClick={() => { if (confirmStart) { actions.startSubmission(confirmStart.id, sid); setTaking(confirmStart.id); } setConfirmStart(null); }}>Start now</button></>}>
-        {confirmStart && <div className="space-y-2 text-sm"><p className="whitespace-pre-line">{confirmStart.instructions}</p><p>{confirmStart.questions.length} questions · {confirmStart.maxMarks} marks{confirmStart.durationMin ? ` · ${confirmStart.durationMin} minutes once you start` : ''}.</p><p className="text-navy-500">Your answers save automatically. When time runs out, your answers are submitted for you.</p></div>}
+        {confirmStart && <div className="space-y-2 text-sm"><p className="whitespace-pre-line">{confirmStart.instructions}</p>{confirmStart.attachments?.length ? <p className="text-navy-600">Your teacher attached a test paper. You can open it once you start.</p> : null}<p>{confirmStart.questions.length} questions · {confirmStart.maxMarks} marks{confirmStart.durationMin ? ` · ${confirmStart.durationMin} minutes once you start` : ''}.</p><p className="text-navy-500">Your answers save automatically. When time runs out, your answers are submitted for you.</p></div>}
       </Dialog>
       {reviewing && <QuizReview task={reviewing} sub={subOf(reviewing)} studentId={sid} onClose={() => setReview(null)} />}
     </div>
@@ -227,6 +210,7 @@ function QuizReview({ task: t, sub, studentId, onClose }: { task: Task; sub?: Su
             return (
               <div key={q.id} className="rounded-lg border border-navy-100 p-3 text-sm">
                 <div className="flex justify-between gap-2"><p className="font-medium">{i + 1}. {q.text}</p><span className={got === q.points ? 'text-success-700' : 'text-error-600'}>{got}/{q.points}</span></div>
+                {sub.files.some((f) => f.name.startsWith(`${q.id}__`)) && <div className="mt-2"><FileList files={sub.files.filter((f) => f.name.startsWith(`${q.id}__`))} /></div>}
                 <p className="mt-1 text-navy-600">Your answer: {q.type === 'mcq' ? q.options?.[Number(a)] ?? '—' : q.type === 'true_false' ? (a ? (a === 'true' ? 'True' : 'False') : '—') : a || '—'}</p>
                 {(q.type === 'mcq' || q.type === 'true_false') && got !== q.points && <p className="text-xs text-success-700">Correct answer: {q.type === 'mcq' ? q.options?.[Number(q.correct)] : q.correct === 'true' ? 'True' : 'False'}</p>}
               </div>
@@ -258,7 +242,10 @@ function QuizRunner({ task: t, studentId, onDone }: { task: Task; studentId: str
   useEffect(() => { const i = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(i); }, []);
   useEffect(() => { if (Number.isFinite(deadline) && left === 0) finish(); }); // auto-submit when time is up
   const set = (q: string, v: string) => { const next = { ...answers, [q]: v }; setAnswers(next); if (sub) actions.saveSubmission(sub.id, { answers: next }); };
-  const answered = qs.filter((q) => (answers[q.id] ?? '').trim()).length;
+  const filesFor = (qid: string) => (sub?.files ?? []).filter((f) => f.name.startsWith(`${qid}__`));
+  const addFiles = (qid: string, added: SubmittedFile[]) => { if (sub) actions.saveSubmission(sub.id, { files: [...sub.files, ...added.map((f) => ({ ...f, name: `${qid}__${f.name}` }))] }); };
+  const removeFile = (qid: string, j: number) => { if (!sub) return; const target = filesFor(qid)[j]; actions.saveSubmission(sub.id, { files: sub.files.filter((f) => f !== target) }); };
+  const answered = qs.filter((q) => (answers[q.id] ?? '').trim() || filesFor(q.id).length).length;
   if (!sub || sub.status !== 'in_progress') return <Notice>This assessment has already been submitted. <button type="button" className="underline" onClick={onDone}>Back</button></Notice>;
   return (
     <div className="space-y-5 animate-fade-in max-w-3xl mx-auto">
@@ -266,6 +253,8 @@ function QuizRunner({ task: t, studentId, onDone }: { task: Task; studentId: str
         <div><p className="font-semibold text-navy-900">{t.title}</p><p className="text-xs text-navy-500">{t.subject} · {answered} of {qs.length} answered · answers save automatically</p></div>
         {Number.isFinite(deadline) && <span className={`flex items-center gap-2 font-mono text-lg font-bold px-3 py-1 rounded-lg ${left < 120 ? 'bg-error-100 text-error-700' : 'bg-navy-100 text-navy-800'}`}><Timer className="w-5 h-5" />{Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}</span>}
       </div>
+      {t.instructions && <p className="text-sm text-navy-700 whitespace-pre-line">{t.instructions}</p>}
+      <QuestionPaper t={t} />
       {qs.map((q, i) => (
         <Card key={q.id}>
           <div className="flex justify-between gap-3"><p className="font-medium text-navy-900 whitespace-pre-line">{i + 1}. {q.text}</p><span className="text-xs text-navy-500 whitespace-nowrap">{q.points} mark{q.points === 1 ? '' : 's'}</span></div>
@@ -273,11 +262,16 @@ function QuizRunner({ task: t, studentId, onDone }: { task: Task; studentId: str
             {q.type === 'mcq' && <div className="space-y-2">{(q.options ?? []).map((o, j) => o.trim() && <label key={j} className={`flex items-center gap-3 rounded-lg border px-3 py-2 cursor-pointer ${answers[q.id] === String(j) ? 'border-navy-600 bg-navy-50' : 'border-navy-200'}`}><input type="radio" name={q.id} checked={answers[q.id] === String(j)} onChange={() => set(q.id, String(j))} /><span className="text-sm"><b className="mr-1">{String.fromCharCode(65 + j)}.</b>{o}</span></label>)}</div>}
             {q.type === 'true_false' && <div className="flex gap-3">{['true', 'false'].map((v) => <label key={v} className={`flex-1 flex items-center gap-2 rounded-lg border px-3 py-2 cursor-pointer ${answers[q.id] === v ? 'border-navy-600 bg-navy-50' : 'border-navy-200'}`}><input type="radio" name={q.id} checked={answers[q.id] === v} onChange={() => set(q.id, v)} />{v === 'true' ? 'True' : 'False'}</label>)}</div>}
             {q.type === 'short' && <input className="input" value={answers[q.id] ?? ''} onChange={(e) => set(q.id, e.target.value)} placeholder="Your answer" aria-label={`Answer ${i + 1}`} />}
-            {q.type === 'essay' && <textarea className="input min-h-[140px]" value={answers[q.id] ?? ''} onChange={(e) => set(q.id, e.target.value)} placeholder="Write your answer" aria-label={`Answer ${i + 1}`} />}
-            {q.type === 'file' && (
-              <div>
-                <label className="btn-secondary text-sm cursor-pointer"><Paperclip className="w-4 h-4" /> Attach file or photo<input type="file" accept="image/*,.pdf,.doc,.docx" capture="environment" className="sr-only" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; const sf = await toSubmittedFile(f); const files = [...(sub.files ?? []).filter((x) => !x.name.startsWith(`${q.id}__`)), { ...sf, name: `${q.id}__${sf.name}` }]; actions.saveSubmission(sub.id, { files }); set(q.id, sf.name); }} /></label>
-                {answers[q.id] && <p className="text-sm text-navy-600 mt-2">Attached: {answers[q.id]}</p>}
+            {q.type === 'essay' && <textarea className="input min-h-[140px]" value={answers[q.id] ?? ''} onChange={(e) => set(q.id, e.target.value)} placeholder="Write your answer here, or upload it as a file below" aria-label={`Answer ${i + 1}`} />}
+            {(q.type === 'short' || q.type === 'essay' || q.type === 'file') && (
+              <div className={q.type === 'file' ? '' : 'mt-3'}>
+                {q.type === 'file' ? <FileDrop label="Upload your answer" onAdd={(f) => addFiles(q.id, f)} /> : (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <FileDrop compact label={q.type === 'essay' ? 'Upload answer instead (Word, PDF, photo…)' : 'Upload a file'} onAdd={(f) => addFiles(q.id, f)} />
+                    <span className="text-xs text-navy-400">You can type, upload, or both.</span>
+                  </div>
+                )}
+                <div className="mt-2"><FileList files={filesFor(q.id)} onRemove={(j) => removeFile(q.id, j)} /></div>
               </div>
             )}
           </div>

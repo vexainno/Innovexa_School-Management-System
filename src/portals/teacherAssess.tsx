@@ -7,10 +7,11 @@ import type { Question, QuestionType, Submission, Task } from '@/store/types';
 import { downloadCsv } from '@/store/files';
 import { Card, Dialog, Field, Header, Notice, Pill, Stat, Table, Tabs } from '@/components/kit';
 import { useMe, type PageProps } from './shared';
+import { FileDrop, FileList } from '@/components/Attachments';
 
 const QTYPES: { id: QuestionType; label: string }[] = [
   { id: 'mcq', label: 'Multiple choice' }, { id: 'true_false', label: 'True / false' }, { id: 'short', label: 'Short answer' },
-  { id: 'essay', label: 'Essay (marked by teacher)' }, { id: 'file', label: 'File upload (marked by teacher)' },
+  { id: 'essay', label: 'Essay — type or upload (marked by teacher)' }, { id: 'file', label: 'File upload only (marked by teacher)' },
 ];
 const toLocal = (iso: string) => { const d = new Date(iso); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
 const fromLocal = (v: string) => new Date(v).toISOString();
@@ -78,12 +79,21 @@ function TaskEditor({ task, onClose }: { task: Task; onClose: () => void }) {
       <button type="button" className="btn-primary" disabled={problems.length > 0} onClick={() => save(true)}><Send className="w-4 h-4" /> Publish to class</button>
     </>}>
       <div className="space-y-4">
-        <div className="grid md:grid-cols-4 gap-3">
-          <div className="md:col-span-2"><Field label="Title"><input className="input" value={t.title} onChange={(e) => set({ title: e.target.value })} placeholder={t.kind === 'quiz' ? 'e.g. Algebra Quiz 3' : 'e.g. Mathematics – Algebra Exercises'} /></Field></div>
-          <Field label="Class and section"><select className="input" value={`${t.grade}|${t.section}`} onChange={(e) => { const [g, sec] = e.target.value.split('|'); const sub = mine.find((a) => a.grade === Number(g) && a.section === sec)?.subject ?? ''; set({ grade: Number(g), section: sec, subject: sub }); }}><option value="0|">Select</option>{[...new Set(mine.map((a) => `${a.grade}|${a.section}`))].map((k) => <option key={k} value={k}>Grade {k.replace('|', '')}</option>)}</select></Field>
+        <div className="grid md:grid-cols-3 gap-3">
+          <div><Field label="Title"><input className="input" value={t.title} onChange={(e) => set({ title: e.target.value })} placeholder={t.kind === 'quiz' ? 'e.g. Algebra Quiz 3' : 'e.g. Mathematics – Algebra Exercises'} /></Field></div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Grade"><select className="input" value={t.grade} onChange={(e) => { const g = Number(e.target.value); const first = mine.filter((a) => a.grade === g).sort((a, b) => a.section.localeCompare(b.section))[0]; set({ grade: g, section: first?.section ?? '', subject: first?.subject ?? '' }); }}><option value={0}>Select</option>{[...new Set(mine.map((a) => a.grade))].sort((a, b) => a - b).map((g) => <option key={g} value={g}>Grade {g}</option>)}</select></Field>
+            <Field label="Section"><select className="input" value={t.section} onChange={(e) => { const sec = e.target.value; set({ section: sec, subject: mine.find((a) => a.grade === t.grade && a.section === sec)?.subject ?? '' }); }}><option value="">Select</option>{[...new Set(mine.filter((a) => a.grade === t.grade).map((a) => a.section))].sort().map((x) => <option key={x} value={x}>Section {x}</option>)}</select></Field>
+          </div>
           <Field label="Subject"><select className="input" value={t.subject} onChange={(e) => set({ subject: e.target.value })}>{subjects.map((x) => <option key={x}>{x}</option>)}</select></Field>
         </div>
-        <Field label="Instructions"><textarea className="input min-h-[80px]" value={t.instructions} onChange={(e) => set({ instructions: e.target.value })} placeholder="What should students do?" /></Field>
+        <Field label="Instructions"><textarea className="input min-h-[80px]" value={t.instructions} onChange={(e) => set({ instructions: e.target.value })} placeholder={t.attachments?.length ? 'Optional when you attach a question paper' : 'What should students do?'} /></Field>
+        <div>
+          <span className="label">Question paper or reference files (optional)</span>
+          <p className="text-xs text-navy-500 mb-2">Attach the {t.kind === 'quiz' ? 'test paper' : 'assignment'} as a Word, PDF or other file. Students open it in their portal.</p>
+          <FileList files={t.attachments ?? []} onRemove={(i) => set({ attachments: (t.attachments ?? []).filter((_, j) => j !== i) })} />
+          <div className="mt-2"><FileDrop label="Upload question paper" onAdd={(f) => set({ attachments: [...(t.attachments ?? []), ...f] })} /></div>
+        </div>
         <div className="grid md:grid-cols-4 gap-3">
           <Field label={t.kind === 'quiz' ? 'Opens' : 'Available from'}><input type="datetime-local" className="input" value={toLocal(t.opensAt)} onChange={(e) => e.target.value && set({ opensAt: fromLocal(e.target.value) })} /></Field>
           <Field label={t.kind === 'quiz' ? 'Closes' : 'Submission deadline'}><input type="datetime-local" className="input" value={toLocal(t.closesAt)} onChange={(e) => e.target.value && set({ closesAt: fromLocal(e.target.value) })} /></Field>
@@ -92,7 +102,7 @@ function TaskEditor({ task, onClose }: { task: Task; onClose: () => void }) {
             <Field label="Total marks"><input className="input bg-navy-50" readOnly value={quizTotal} /></Field>
           </> : <>
             <Field label="Maximum marks"><input type="number" min="1" className="input" value={t.maxMarks} onChange={(e) => set({ maxMarks: Number(e.target.value) })} /></Field>
-            <Field label="Submission type"><select className="input" value={t.submissionType} onChange={(e) => set({ submissionType: e.target.value as Task['submissionType'] })}><option value="text_file">Typed answer and/or files</option><option value="file">File upload (PDF, Word, photos)</option><option value="text">Typed answer only</option></select></Field>
+            <Field label="Submission type"><select className="input" value={t.submissionType} onChange={(e) => set({ submissionType: e.target.value as Task['submissionType'] })}><option value="text_file">Typed answer and/or files</option><option value="file">File upload only (Word, PDF, photos…)</option><option value="text">Typed answer only</option></select></Field>
           </>}
         </div>
         <div className="flex flex-wrap gap-4 text-sm">
@@ -238,7 +248,9 @@ function GradeDialog({ sub, onClose }: { sub: Submission; onClose: () => void })
             return (
               <div key={q.id} className="rounded-lg border border-navy-100 p-3">
                 <div className="flex justify-between gap-3"><p className="text-sm font-medium text-navy-900">Q{i + 1}. {q.text}</p><span className="text-xs text-navy-500 whitespace-nowrap">{q.points} marks</span></div>
-                <p className="text-sm mt-2 whitespace-pre-line"><span className="text-navy-500">Answer: </span>{shown}</p>
+                {(shown !== '—' || !sub.files.some((f) => f.name.startsWith(`${q.id}__`))) && q.type !== 'file' && <p className="text-sm mt-2 whitespace-pre-line"><span className="text-navy-500">Answer: </span>{shown}</p>}
+                {sub.files.some((f) => f.name.startsWith(`${q.id}__`)) && <div className="mt-2"><p className="text-xs text-navy-500 mb-1">Uploaded answer</p><FileList files={sub.files.filter((f) => f.name.startsWith(`${q.id}__`))} /></div>}
+                {q.type === 'file' && !sub.files.some((f) => f.name.startsWith(`${q.id}__`)) && <p className="text-sm mt-2 text-navy-500">No file uploaded.</p>}
                 {auto && <p className="text-xs mt-1">{(per[q.id] ?? 0) === q.points ? <span className="text-success-700">✔ Correct (auto-marked)</span> : <span className="text-error-600">✖ Incorrect — key: {q.type === 'mcq' ? q.options?.[Number(q.correct)] : q.type === 'true_false' ? q.correct : q.correct?.split('|')[0]}</span>}</p>}
                 {q.rubric && <p className="text-xs text-navy-500 mt-1">Rubric: {q.rubric}</p>}
                 <label className="flex items-center gap-2 text-sm mt-2">Marks <input type="number" min="0" max={q.points} className="input py-1 w-20" value={per[q.id] ?? 0} onChange={(e) => setPer({ ...per, [q.id]: Math.min(q.points, Math.max(0, Number(e.target.value))) })} /> / {q.points} {auto && <span className="text-xs text-navy-400">(you can override)</span>}</label>
@@ -250,17 +262,8 @@ function GradeDialog({ sub, onClose }: { sub: Submission; onClose: () => void })
         <div className="space-y-4">
           {sub.text && <div><p className="label">Typed answer</p><div className="rounded-lg bg-navy-50 p-3 text-sm whitespace-pre-line">{sub.text}</div></div>}
           <div><p className="label">Files ({sub.files.length})</p>
-            {sub.files.length === 0 ? <p className="text-sm text-navy-500">No files attached.</p> : (
-              <div className="grid sm:grid-cols-3 gap-3">
-                {sub.files.map((f, i) => (
-                  <div key={i} className="rounded-lg border border-navy-100 p-2 text-sm">
-                    {f.dataUrl && f.type.startsWith('image/') ? <img src={f.dataUrl} alt={f.name} className="w-full h-40 object-contain bg-navy-50 rounded" /> : <div className="h-40 rounded bg-navy-50 flex items-center justify-center text-navy-400 text-xs">{f.type.includes('pdf') ? 'PDF document' : f.type.startsWith('image/') ? 'Image' : 'Document'}</div>}
-                    <p className="truncate mt-1">{f.name}</p>
-                    {f.dataUrl ? <a className="text-xs text-navy-700 underline" href={f.dataUrl} download={f.name}><Download className="inline w-3 h-3" /> Download</a> : <p className="text-[11px] text-navy-400">Preview not stored in demo data</p>}
-                  </div>
-                ))}
-              </div>
-            )}
+            <FileList files={sub.files} emptyText="No files attached." />
+            {sub.files.some((f) => f.dataUrl && f.type.startsWith('image/')) && <div className="grid sm:grid-cols-3 gap-3 mt-3">{sub.files.filter((f) => f.dataUrl && f.type.startsWith('image/')).map((f, i) => <img key={i} src={f.dataUrl} alt={f.name} className="w-full h-48 object-contain bg-navy-50 rounded-lg" />)}</div>}
           </div>
           <label className="flex items-center gap-2 text-sm">Mark <input type="number" min="0" max={t.maxMarks} className="input py-1.5 w-24" value={score} onChange={(e) => setScore(Number(e.target.value))} /> / {t.maxMarks}</label>
         </div>

@@ -1,5 +1,5 @@
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   CalendarDays,
   CheckCircle2,
@@ -19,8 +19,7 @@ import {
 } from '@/components/ui';
 
 import { useAuth } from '@/context/AuthContext';
-import { STUDENTS, ATTENDANCE } from '@/data/mockData';
-import { getAttendance } from '@/data/workflow';
+import { className, schoolDays, studentAttendance, studentIdForUser, useSchool } from '@/store/store';
 
 type AttendanceView = 'week' | 'month' | 'day';
 
@@ -34,13 +33,8 @@ interface AttendanceItem {
   date: string;
   status: AttendanceStatus;
   note?: string;
-  session?: string;
   sponsorName?: string;
 }
-
-const DEMO_STUDENT_LINKS: Record<string, string> = {
-  u11: 's1',
-};
 
 const VIEW_OPTIONS: { value: AttendanceView; label: string }[] = [
   { value: 'week', label: 'One Week' },
@@ -155,66 +149,23 @@ export function StudentAttendanceCalendar() {
     dateToISO(new Date())
   );
 
-  const [records, setRecords] = useState<AttendanceItem[]>(() =>
-    getAttendance() as AttendanceItem[]
-  );
+  const school = useSchool();
+  const studentId = user ? studentIdForUser(user) : undefined;
+  const student = school.students.find((item) => item.id === studentId && item.status === 'active');
 
-  const studentId = user
-    ? DEMO_STUDENT_LINKS[user.id] ??
-      STUDENTS.find((student) => student.name === user.name)?.id
-    : undefined;
-
-  const student = STUDENTS.find(
-    (item) => item.id === studentId && item.status === 'active'
-  );
-
-  useEffect(() => {
-    const refreshAttendance = () => {
-      setRecords(getAttendance() as AttendanceItem[]);
-    };
-
-    window.addEventListener(
-      'innosysedu:attendance-updated',
-      refreshAttendance
-    );
-
-    window.addEventListener('storage', refreshAttendance);
-
-    return () => {
-      window.removeEventListener(
-        'innosysedu:attendance-updated',
-        refreshAttendance
-      );
-
-      window.removeEventListener('storage', refreshAttendance);
-    };
-  }, []);
-
-  const myAttendance = useMemo(() => {
-    if (!studentId) return [];
-
-    const workflowRecords = records.filter(
-      (record) => record.studentId === studentId
-    );
-
-    // Retain legacy attendance records if they are not already
-    // represented in the shared teacher attendance workflow.
-    const workflowIds = new Set(
-      workflowRecords.map((record) => record.id)
-    );
-
-    const legacyRecords = ATTENDANCE.filter(
-      (record) =>
-        record.studentId === studentId &&
-        !workflowIds.has(record.id)
-    ) as AttendanceItem[];
-
-    const combined = [...workflowRecords, ...legacyRecords];
-
-    return combined.sort((a, b) =>
-      b.date.localeCompare(a.date)
-    );
-  }, [records, studentId]);
+  // Days a teacher took the register show exactly what was recorded; earlier days come from the school's records.
+  const myAttendance = useMemo<AttendanceItem[]>(() => {
+    if (!student) return [];
+    return schoolDays(130).map((date) => {
+      const reg = school.classRegisters?.find((r) => r.date === date && r.marks[student.id]);
+      return {
+        id: `${student.id}-${date}`, studentId: student.id, studentName: student.name,
+        className: className(student.grade, student.section), date,
+        status: studentAttendance(student.id, date),
+        sponsorName: reg ? school.staff.find((x) => x.id === reg.recordedBy)?.name : undefined,
+      };
+    });
+  }, [school, student]);
 
   const selectedDateObject = parseISODate(selectedDate);
 
@@ -496,9 +447,6 @@ export function StudentAttendanceCalendar() {
 
                   <p className="text-xs text-navy-400 mt-1">
                     {record.className}
-                    {record.session
-                      ? ` · ${record.session} session`
-                      : ''}
                   </p>
 
                   {record.sponsorName && (

@@ -568,10 +568,23 @@ export interface Task {
   submissionType?: 'text' | 'file' | 'text_file';
   latePolicy: 'not_accepted' | 'accepted_marked_late';
   questions: Question[];
+  /** Question paper or reference files the teacher attached (Word, PDF, images…). */
+  attachments?: SubmittedFile[];
   resultsReleased: boolean;
 }
 
 export interface SubmittedFile { name: string; size: number; type: string; dataUrl?: string }
+
+/** A class register: one teacher's attendance for one grade + section on one day. */
+export interface ClassRegister {
+  id: string;
+  date: string;
+  grade: number;
+  section: string;
+  marks: Record<string, 'present' | 'absent' | 'late' | 'excused'>;
+  recordedBy: string;
+  recordedAt: string;
+}
 
 export interface Submission {
   id: string;
@@ -615,6 +628,8 @@ export interface SchoolState {
   bookRequests: BookRequest[];
   tasks: Task[];
   submissions: Submission[];
+  /** Attendance registers saved by teachers; days without a register use the school's historical record. */
+  classRegisters?: ClassRegister[];
   reportTemplateFile?: { name: string; size: number; uploadedAt: string; active: boolean };
   students: SchoolStudent[];
   staff: StaffMember[];
