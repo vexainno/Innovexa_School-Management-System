@@ -1,5 +1,5 @@
 import type {
-  DayBlock,
+  DayBlock, Submission, Task,
   Application, Assignment, Book, BookIssue, CalendarEvent, Concession, CounselingSummary, Exam, Expense,
   Gradebook, GradingConfig, Incident, Leadership, Loan, MarkRow, Payment, ReportBatch, SchoolState,
   SchoolStudent, StaffAttendance, StaffMember, TimetableSlot,
@@ -17,7 +17,7 @@ function rng(seed: number) {
   };
 }
 
-export const SEED_VERSION = 5;
+export const SEED_VERSION = 6;
 export const todayISO = () => new Date().toISOString().slice(0, 10);
 const daysAgo = (n: number) => {
   const d = new Date();
@@ -613,6 +613,7 @@ export function buildSeed(): SchoolState {
     },
     mode: 'demo',
     schedule: { days: [...DAYS], blocks: DEFAULT_BLOCKS, status: 'published', publishedAt: '2026-09-01', effectiveFrom: '2026-09-07' },
+    ...makeTasks(students),
     accounts: [],
     bookRequests: [
       { id: 'br1', bookId: 'bk-7', studentId: by('10A', 2), requestedAt: daysAgo(1), status: 'pending', note: 'Need it for the chemistry test next week.' },
@@ -734,6 +735,63 @@ export function buildSeed(): SchoolState {
   };
 }
 
+function isoAt(daysFromNow: number, hour: number) {
+  const d = new Date();
+  d.setDate(d.getDate() + daysFromNow);
+  d.setHours(hour, 0, 0, 0);
+  return d.toISOString();
+}
+
+function makeTasks(students: SchoolStudent[]): { tasks: Task[]; submissions: Submission[] } {
+  const r = rng(77);
+  const kids = (k: string) => students.filter((s) => `${s.grade}${s.section}` === k && s.status === 'active');
+  const quiz: Task = {
+    id: 'tk-q1', kind: 'quiz', title: 'Algebra Quiz 2 — Quadratic equations', subject: 'Mathematics', grade: 11, section: 'A', teacherId: 'u6',
+    instructions: 'Answer all questions. You have 20 minutes once you start. Objective questions are marked automatically; your written answer is marked by your teacher.',
+    maxMarks: 10, status: 'published', createdAt: isoAt(-2, 9), opensAt: isoAt(-1, 8), closesAt: isoAt(3, 18), durationMin: 20, shuffle: false,
+    latePolicy: 'not_accepted', resultsReleased: false,
+    questions: [
+      { id: 'q1', type: 'mcq', text: 'What are the roots of x² − 5x + 6 = 0?', options: ['x = 2 and x = 3', 'x = −2 and x = −3', 'x = 1 and x = 6', 'x = 5 and x = 6'], correct: '0', points: 2 },
+      { id: 'q2', type: 'true_false', text: 'The discriminant of x² + 4x + 4 = 0 is zero.', correct: 'true', points: 1 },
+      { id: 'q3', type: 'mcq', text: 'Which value of k makes x² + kx + 9 a perfect square?', options: ['3', '6', '9', '18'], correct: '1', points: 2 },
+      { id: 'q4', type: 'short', text: 'Write the quadratic formula for ax² + bx + c = 0 (use sqrt for the square root).', correct: 'x = (-b ± sqrt(b^2 - 4ac)) / 2a|(-b±sqrt(b^2-4ac))/2a|x=(-b±√(b²-4ac))/2a', points: 2 },
+      { id: 'q5', type: 'essay', text: 'Explain, step by step, how you would solve 2x² − 3x − 2 = 0 by factorising.', points: 3, rubric: '1 mark correct factor pair, 1 mark correct factorisation, 1 mark both roots.' },
+    ],
+  };
+  const assignment: Task = {
+    id: 'tk-a1', kind: 'assignment', title: 'Physics — Kinematics problem set', subject: 'Physics', grade: 11, section: 'A', teacherId: 'u6',
+    instructions: 'Complete exercises 1–10 on page 42 of Essential Physics. Show all working. You may type your answers or upload clear photos of your handwritten pages.',
+    maxMarks: 20, status: 'published', createdAt: isoAt(-3, 10), opensAt: isoAt(-3, 10), closesAt: isoAt(5, 23), submissionType: 'text_file',
+    latePolicy: 'accepted_marked_late', resultsReleased: false, questions: [],
+  };
+  const graded: Task = {
+    id: 'tk-a0', kind: 'assignment', title: 'Mathematics — Linear equations homework', subject: 'Mathematics', grade: 11, section: 'A', teacherId: 'u6',
+    instructions: 'Solve the 8 linear equations on the worksheet handed out in class.', maxMarks: 20, status: 'closed', createdAt: isoAt(-20, 9),
+    opensAt: isoAt(-20, 9), closesAt: isoAt(-12, 23), submissionType: 'text_file', latePolicy: 'accepted_marked_late', resultsReleased: true, questions: [],
+  };
+  const toMark: Task = {
+    id: 'tk-a2', kind: 'assignment', title: 'Mathematics — Algebra Exercises', subject: 'Mathematics', grade: 10, section: 'A', teacherId: 'u6',
+    instructions: 'Complete exercises 1–10 and submit your answers.', maxMarks: 20, status: 'closed', createdAt: isoAt(-9, 9),
+    opensAt: isoAt(-9, 9), closesAt: isoAt(-1, 23), submissionType: 'file', latePolicy: 'accepted_marked_late', resultsReleased: false, questions: [],
+  };
+  const submissions: Submission[] = [];
+  kids('11A').forEach((k, i) => {
+    const score = k.id === 's1' ? 18 : 10 + Math.floor(r() * 10);
+    submissions.push({ id: `sb-0-${i}`, taskId: 'tk-a0', studentId: k.id, startedAt: isoAt(-14, 16), submittedAt: isoAt(-13 + (i % 3 === 0 ? 2 : 0), 17), status: 'graded', late: i % 3 === 0 && i > 0,
+      answers: {}, text: 'Worked solutions attached.', files: [{ name: 'linear_equations.jpg', size: 184000, type: 'image/jpeg' }], score, feedback: score >= 16 ? 'Excellent, clear working.' : 'Check your sign changes when moving terms.', gradedAt: isoAt(-10, 12) });
+  });
+  kids('10A').slice(0, 11).forEach((k, i) => {
+    submissions.push({ id: `sb-2-${i}`, taskId: 'tk-a2', studentId: k.id, startedAt: isoAt(-4, 15), submittedAt: isoAt(i === 3 ? 0 : -2, 18), status: 'submitted', late: i === 3,
+      answers: {}, files: [{ name: `algebra_page${1 + (i % 2)}.jpg`, size: 210000, type: 'image/jpeg' }, ...(i % 4 === 0 ? [{ name: 'algebra_answers.pdf', size: 92000, type: 'application/pdf' }] : [])] });
+  });
+  kids('11A').slice(1, 6).forEach((k, i) => {
+    const ans: Record<string, string> = { q1: i % 2 ? '0' : '2', q2: 'true', q3: '1', q4: i % 2 ? '(-b±sqrt(b^2-4ac))/2a' : 'b squared minus 4ac', q5: '(2x + 1)(x − 2) = 0, so x = −1/2 or x = 2.' };
+    const auto = (ans.q1 === '0' ? 2 : 0) + 1 + 2 + (i % 2 ? 2 : 0);
+    submissions.push({ id: `sb-q-${i}`, taskId: 'tk-q1', studentId: k.id, startedAt: isoAt(0, 9), submittedAt: isoAt(0, 9), status: 'submitted', late: false, answers: ans, files: [], autoScore: auto, perQuestion: { q1: ans.q1 === '0' ? 2 : 0, q2: 1, q3: 2, q4: i % 2 ? 2 : 0 } });
+  });
+  return { tasks: [quiz, assignment, graded, toMark], submissions };
+}
+
 /** Empty school used when a real school starts fresh (VITE_START_FRESH=true). Same codebase, no demo records. */
 export function buildFreshSchool(name = 'Your School'): SchoolState {
   const demo = buildSeed();
@@ -759,6 +817,6 @@ export function buildFreshSchool(name = 'Your School'): SchoolState {
     announcements: [], notifications: [], threads: [], staffReports: [], opsLog: [], applications: [], leadership: [],
     complaints: [], followUps: [], tenants: [], tickets: [], platformLog: [], backups: [],
     schedule: { days: [...DAYS], blocks: DEFAULT_BLOCKS, status: 'draft' },
-    accounts: [], bookRequests: [], reportTemplateFile: undefined,
+    accounts: [], bookRequests: [], reportTemplateFile: undefined, tasks: [], submissions: [],
   };
 }

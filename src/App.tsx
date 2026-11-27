@@ -40,8 +40,8 @@ const teacher: Loader = () => import('@/portals/teacher');
 const student: Loader = () => import('@/portals/student');
 const oldTeacher: Loader = () => import('@/pages/TeacherCounselorPages');
 const oldStudent: Loader = () => import('@/pages/StudentParentPages');
-const builder: Loader = () => import('@/pages/TeacherAssessmentBuilder');
-const marking: Loader = () => import('@/pages/TeacherAssessmentMarking');
+const teacherAssess: Loader = () => import('@/portals/teacherAssess');
+const studentAssess: Loader = () => import('@/portals/studentAssess');
 const studentPortal: Loader = () => import('@/pages/StudentPortalDashboard');
 const studentAtt: Loader = () => import('@/pages/StudentAttendanceCalendar');
 const studentResults: Loader = () => import('@/pages/StudentResultsPage');
@@ -193,11 +193,11 @@ const ROUTES: Record<Role, Record<string, Page>> = {
     timetable: L(teacher, 't', 'TeacherTimetable'),
     'student-lists': L(teacher, 't', 'StudentLists'),
     attendance: L(oldTeacher, 'ot', 'TeacherAttendance'),
-    assignments: L(builder, 'b', 'default'),
-    'online-assessments': L(builder, 'b', 'default'),
-    'assessment-questions': L(builder, 'b', 'default'),
-    submissions: L(marking, 'm', 'default'),
-    marking: L(marking, 'm', 'default'),
+    assignments: L(teacherAssess, 'ta', 'TeacherAssignmentsPage'),
+    'online-assessments': L(teacherAssess, 'ta', 'OnlineAssessmentsPage'),
+    'assessment-questions': L(teacherAssess, 'ta', 'QuestionBank'),
+    submissions: L(teacherAssess, 'ta', 'SubmissionsPage'),
+    marking: L(teacherAssess, 'ta', 'MarkingPage'),
     gradebook: L(teacher, 't', 'GradebookSubmission'),
     materials: L(oldTeacher, 'ot', 'TeacherResources'),
     'academic-progress': L(teacher, 't', 'AcademicProgress'),
@@ -222,7 +222,8 @@ const ROUTES: Record<Role, Record<string, Page>> = {
     classes: L(oldStudent, 'os', 'StudentClasses'),
     subjects: L(oldStudent, 'os', 'StudentSubjects'),
     timetable: L(student, 'st', 'StudentTimetable'),
-    assignments: L(oldStudent, 'os', 'StudentAssignments'),
+    assignments: L(studentAssess, 'sa2', 'StudentAssignmentsPage'),
+    'online-assessments': L(studentAssess, 'sa2', 'StudentQuizzesPage'),
     resources: L(oldStudent, 'os', 'StudentResources'),
     attendance: L(studentAtt, 'sa', 'StudentAttendanceCalendar'),
     results: L(studentResults, 'sr', 'StudentResultsPage'),
@@ -237,7 +238,7 @@ const ROUTES: Record<Role, Record<string, Page>> = {
 /** Older page names still used by a few retained screens. */
 const ALIASES: Partial<Record<Role, Record<string, string>>> = {
   teacher: { assessments: 'online-assessments', resources: 'materials', students: 'student-lists', messages: 'communication' },
-  student: { assessments: 'assignments', 'report-card': 'report-cards' },
+  student: { assessments: 'online-assessments', 'report-card': 'report-cards' },
 };
 
 function readHash() {

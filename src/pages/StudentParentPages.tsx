@@ -34,7 +34,6 @@ import { useAuth } from '@/context/AuthContext';
 import {
   STUDENTS,
   SUBJECTS,
-  ASSESSMENTS,
   ATTENDANCE,
   CLASSES,
 } from '@/data/mockData';
@@ -93,28 +92,6 @@ export function StudentSubjects() {
   );
 }
 
-export function StudentAssignments() {
-  return (
-    <div className="space-y-6 animate-fade-in">
-      <PageHeader title="My Assignments" subtitle="Your assignments and due dates." />
-      <SectionCard title="Assignments">
-        <table className="table-base">
-          <thead><tr><th>Assignment</th><th>Type</th><th>Subject</th><th>Date</th><th>Marks</th><th>Status</th></tr></thead>
-          <tbody>
-            {ASSESSMENTS.filter((a) => a.classId === 'c5').map((a) => (
-              <tr key={a.id}>
-                <td className="font-medium text-navy-800">{a.title}</td>
-                <td><span className="badge-info">{a.type}</span></td>
-                <td>{a.subjectName}</td><td>{a.date}</td><td>{a.totalMarks}</td>
-                <td><span className={a.status === 'graded' ? 'badge-success' : a.status === 'published' ? 'badge-info' : 'badge-warning'}>{a.status}</span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </SectionCard>
-    </div>
-  );
-}
 
 export function StudentResources() {
   const { user } = useAuth();

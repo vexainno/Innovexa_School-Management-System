@@ -62,7 +62,7 @@ Sessions persist across refreshes when "Remember me" is ticked.
 | Guidance Counselor | Existing counselor workspace; Student Support Notifications are delivered privately to the one selected student |
 | Librarian | Overview · Book Inventory · Add New Books · Book Categories · Student Borrowing · Book Returns · Overdue Books · Damaged and Missing Books · Student Library Accounts · Library Reports |
 | Parent / Guardian | Overview · My Children · Attendance · Academic Performance · Examination Results · Report Cards · Class Timetable · School Announcements · Teacher Communication · Fee Statement and Payment · Payment History · School Calendar · Notifications · Profile and Settings |
-| Student | Dashboard · Classes · Subjects · Timetable · Assignments · Resources · Attendance · Results · Report Card · Library · Counseling · Announcements · Notifications |
+| Student | Dashboard · Classes · Subjects · Timetable · My Assignments · Online Assessments · Resources · Attendance · Results · Report Card · Library · Counseling · Announcements · Notifications |
 | Innovexa Super Admin | Platform Overview · School Management · Create New School · School Configurations · Subscription Management · Platform Users · System Roles and Permissions · Platform Analytics · System Monitoring · Storage Management · Backup Management · Security and Audit Logs · Platform Settings · Support and Maintenance |
 
 Every dashboard card is clickable and opens the matching sidebar page.
@@ -89,6 +89,7 @@ so they always agree across workspaces.
 
 - **Weekly class schedule (VP):** define the school day (assembly, lesson periods, breaks, lunch, activities, dismissal, with times and school days), build each class's timetable with teacher/room conflict checks, copy days, then publish. Every timetable in the platform follows it.
 - **School's own report card (Academic Officer):** upload a Word (.docx) design containing placeholders such as `{student_name}` and `{#subjects}…{/subjects}`; every report card is then produced in that design (single download or a .zip per class). A starter template is provided.
+- **Assignments and online assessments:** teachers create assignments (typed answers and/or files and photos) and timed online quizzes (multiple choice, true/false, short answer, essay, file upload) for their own classes, reuse questions from their question bank, and publish. Students are notified, take quizzes with a timer (auto-submitted when time runs out) or submit assignments, objective questions are marked automatically, teachers mark the rest with feedback and release results; students and parents then see the marks.
 - **Library booking:** students browse covers and details and book a copy; requests go to the Librarian to approve, then issue.
 - **Private counselor messages:** students open, read and reply; the counselor sees replies and answers. Parents and other staff cannot see them.
 - **Parent payments:** card form (Luhn/expiry validation, bank one-time code step) and MTN / Orange mobile money (payment request to the parent's phone, plus a one-tap link to the phone's mobile money menu when the school sets its dial code). Finance sets the school's bank and merchant wallets under *School Fee Structure → How parents pay*.

@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react';
 import type { Role, User } from '@/types';
 import { buildFreshSchool, buildSeed, feeTotal, roomFor, SEED_VERSION, teacherTotal, todayISO } from './seed';
 import type {
-  Payment,
+  Payment, Question, Submission, Task,
   Account, DayBlock, MobileMoneyWallet, WeekDay,
   Announcement, AppNotification, Audience, BatchStatus, Book, Expense, Gradebook, GradingConfig, Incident,
   MarkRow, ReportTemplate, SchoolState, SchoolStudent, StaffAttendance, Substitution,
@@ -325,6 +325,37 @@ const AUDIENCE_ROLES: Record<Audience, Role[]> = {
   admin_staff: ['vice_principal', 'dean', 'registrar', 'academic_officer', 'counselor', 'finance', 'librarian'],
 };
 export const announcementVisibleTo = (a: Announcement, role: Role) => a.audience.some((x) => AUDIENCE_ROLES[x].includes(role)) || a.fromRole === role;
+
+/* ------------------------------ assignments & quizzes ------------------------------ */
+
+const norm = (v: string) => v.toLowerCase().replace(/\s+/g, '').replace(/[×*]/g, '').replace(/√/g, 'sqrt').replace(/²/g, '^2');
+export const isAutoMarked = (q: Question) => q.type === 'mcq' || q.type === 'true_false' || (q.type === 'short' && !!q.correct);
+export function autoMark(task: Task, answers: Record<string, string>) {
+  const per: Record<string, number> = {};
+  let total = 0;
+  for (const q of task.questions) {
+    if (!isAutoMarked(q)) continue;
+    const a = answers[q.id] ?? '';
+    const ok = q.type === 'short' ? (q.correct ?? '').split('|').some((c) => c.trim() && norm(c) === norm(a)) : a === q.correct;
+    per[q.id] = ok ? q.points : 0;
+    total += per[q.id];
+  }
+  return { per, total };
+}
+export const needsManualMarking = (t: Task) => t.kind === 'assignment' || t.questions.some((q) => !isAutoMarked(q));
+export function taskStateFor(t: Task, sub?: Submission) {
+  const nowIso = new Date().toISOString();
+  if (sub?.status === 'graded' && t.resultsReleased) return 'released';
+  if (sub?.status === 'graded') return 'marked';
+  if (sub?.status === 'submitted') return 'submitted';
+  if (t.status === 'closed' || nowIso > t.closesAt) return t.latePolicy === 'accepted_marked_late' && t.status !== 'closed' && t.kind === 'assignment' ? 'overdue' : 'missed';
+  if (nowIso < t.opensAt) return 'upcoming';
+  return sub?.status === 'in_progress' ? 'in_progress' : 'open';
+}
+export const TASK_STATE_LABEL: Record<string, string> = {
+  upcoming: 'Upcoming', open: 'Available', in_progress: 'In progress', submitted: 'Submitted', marked: 'Marked — awaiting release',
+  released: 'Graded', overdue: 'Overdue — late submission accepted', missed: 'Closed — not submitted',
+};
 
 /* ------------------------------ actions ------------------------------ */
 
@@ -850,6 +881,85 @@ export const actions = {
       } else {
         const g = d.gradebooks.find((x) => x.grade === grade && x.section === section && x.subject === subject);
         if (g && g.status === 'draft') g.teacherId = teacherId;
+      }
+    });
+  },
+
+  /* Assignments and online assessments */
+  saveTask(t: Omit<Task, 'id' | 'createdAt' | 'resultsReleased'> & { id?: string }): string {
+    let id = t.id ?? '';
+    update((d) => {
+      const existing = t.id ? d.tasks.find((x) => x.id === t.id) : undefined;
+      if (existing) { Object.assign(existing, t); return; }
+      id = uid('task');
+      d.tasks.unshift({ ...t, id, createdAt: now(), resultsReleased: false });
+    });
+    return id;
+  },
+  publishTask(id: string, teacherName: string) {
+    update((d) => {
+      const t = d.tasks.find((x) => x.id === id);
+      if (!t) return;
+      t.status = 'published';
+      const ids = d.students.filter((x) => x.grade === t.grade && x.section === t.section && x.status === 'active').map((x) => x.id);
+      notify(d, {
+        title: `New ${t.kind === 'quiz' ? 'online assessment' : 'assignment'}: ${t.title}`,
+        body: `${t.subject} · ${teacherName}. ${t.kind === 'quiz' ? `Opens ${fmtDate(t.opensAt)}, closes ${fmtDate(t.closesAt)}${t.durationMin ? `, ${t.durationMin} minutes` : ''}.` : `Due ${fmtDate(t.closesAt)}.`}`,
+        toStudentIds: ids, link: t.kind === 'quiz' ? 'online-assessments' : 'assignments',
+      });
+    });
+  },
+  closeTask(id: string) {
+    update((d) => { const t = d.tasks.find((x) => x.id === id); if (t) t.status = 'closed'; });
+  },
+  deleteTask(id: string) {
+    update((d) => { d.tasks = d.tasks.filter((x) => x.id !== id || x.status !== 'draft'); });
+  },
+  startSubmission(taskId: string, studentId: string): string {
+    let id = '';
+    update((d) => {
+      const ex = d.submissions.find((x) => x.taskId === taskId && x.studentId === studentId);
+      if (ex) { id = ex.id; return; }
+      id = uid('sub');
+      d.submissions.push({ id, taskId, studentId, startedAt: now(), status: 'in_progress', late: false, answers: {}, files: [] });
+    });
+    return id;
+  },
+  saveSubmission(id: string, patch: Partial<Pick<Submission, 'answers' | 'text' | 'files'>>) {
+    update((d) => { const s = d.submissions.find((x) => x.id === id); if (s && s.status === 'in_progress') Object.assign(s, patch); });
+  },
+  submitSubmission(id: string) {
+    update((d) => {
+      const sub = d.submissions.find((x) => x.id === id);
+      const t = d.tasks.find((x) => x.id === sub?.taskId);
+      if (!sub || !t || sub.status !== 'in_progress') return;
+      sub.submittedAt = now();
+      sub.late = sub.submittedAt > t.closesAt;
+      const m = autoMark(t, sub.answers);
+      sub.autoScore = m.total;
+      sub.perQuestion = m.per;
+      if (t.kind === 'quiz' && !needsManualMarking(t)) { sub.status = 'graded'; sub.score = m.total; sub.gradedAt = now(); }
+      else sub.status = 'submitted';
+      const st = d.students.find((x) => x.id === sub.studentId);
+      notify(d, { title: `${t.kind === 'quiz' ? 'Quiz' : 'Assignment'} submitted — ${st?.name}`, body: `${t.title}${sub.late ? ' (late)' : ''}.`, toUserIds: [t.teacherId], link: `submissions:${t.id}` });
+    });
+  },
+  gradeSubmission(id: string, perQuestion: Record<string, number>, score: number, feedback: string) {
+    update((d) => {
+      const s = d.submissions.find((x) => x.id === id);
+      if (!s) return;
+      Object.assign(s, { perQuestion, score, feedback, status: 'graded', gradedAt: now() });
+      const t = d.tasks.find((x) => x.id === s.taskId);
+      if (t?.resultsReleased) notify(d, { title: `Marked: ${t.title}`, body: `You scored ${score} / ${t.maxMarks}.`, toStudentIds: [s.studentId], link: t.kind === 'quiz' ? 'online-assessments' : 'assignments' });
+    });
+  },
+  releaseResults(taskId: string) {
+    update((d) => {
+      const t = d.tasks.find((x) => x.id === taskId);
+      if (!t) return;
+      t.resultsReleased = true;
+      for (const s of d.submissions.filter((x) => x.taskId === taskId && x.status === 'graded')) {
+        notify(d, { title: `Results released: ${t.title}`, body: `You scored ${s.score} / ${t.maxMarks}.${s.feedback ? ` Feedback: ${s.feedback}` : ''}`, toStudentIds: [s.studentId], link: t.kind === 'quiz' ? 'online-assessments' : 'assignments' });
       }
     });
   },

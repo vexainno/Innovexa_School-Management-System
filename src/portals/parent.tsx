@@ -109,17 +109,6 @@ export function ParentAttendance() {
   );
 }
 
-function assignmentsFor(subject: string, studentId: string, total: number | null) {
-  const h = (k: string) => [...`${studentId}${subject}${k}`].reduce((a, c) => a + c.charCodeAt(0), 0);
-  const today = new Date().toISOString().slice(0, 10);
-  const d = (n: number) => { const x = new Date(); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
-  return [
-    { title: `${subject} — Classwork exercise`, due: d(-18), max: 20, submitted: true, marked: true, score: total != null ? Math.round(((total + (h('a') % 9) - 4) / 100) * 20) : null },
-    { title: `${subject} — Quiz 2`, due: d(-9), max: 10, submitted: true, marked: true, score: total != null ? Math.round(((total + (h('b') % 11) - 5) / 100) * 10) : null },
-    { title: `${subject} — Homework assignment`, due: d(4 + (h('c') % 5)), max: 20, submitted: h('d') % 3 === 0, marked: false, score: null },
-  ].map((x) => ({ ...x, overdue: !x.submitted && x.due < today }));
-}
-
 export function ParentPerformance() {
   const [tab, setTab] = useState<'subjects' | 'assignments' | 'progress'>('subjects');
   return (
@@ -146,9 +135,14 @@ export function ParentPerformance() {
               </Card>
             )}
             {tab === 'assignments' && (
-              <Card>
-                <Table head={['Assignment', 'Due', 'Submitted', 'Marked', 'Score']}>
-                  {subjectTotals(s, child.id).flatMap((r) => assignmentsFor(r.subject, child.id, r.total)).map((a) => <tr key={a.title}><td>{a.title}</td><td className="text-xs">{fmtDate(a.due)}</td><td>{a.submitted ? <Pill tone="success">Submitted</Pill> : a.overdue ? <Pill tone="error">Missing</Pill> : <Pill tone="muted">Not yet</Pill>}</td><td>{a.marked ? 'Yes' : 'No'}</td><td>{a.marked && a.score != null ? `${a.score} / ${a.max}` : '—'}</td></tr>)}
+              <Card subtitle="Assignments and online assessments set by teachers. Marks appear after the teacher releases them.">
+                <Table head={['Title', 'Type', 'Subject', 'Deadline', 'Submitted', 'Marked', 'Mark']} empty="No assignments or online assessments yet.">
+                  {s.tasks.filter((t) => t.status !== 'draft' && t.grade === child.grade && t.section === child.section).sort((x, y) => y.closesAt.localeCompare(x.closesAt)).map((t) => {
+                    const sub = s.submissions.find((x) => x.taskId === t.id && x.studentId === child.id);
+                    const done = sub && sub.status !== 'in_progress';
+                    const past = new Date().toISOString() > t.closesAt;
+                    return <tr key={t.id}><td className="font-medium">{t.title}</td><td>{t.kind === 'quiz' ? 'Online assessment' : 'Assignment'}</td><td>{t.subject}</td><td className="text-xs">{fmtDate(t.closesAt)}</td><td>{done ? <Pill tone="success">{sub!.late ? 'Submitted late' : 'Submitted'}</Pill> : past ? <Pill tone="error">Missing</Pill> : <Pill tone="muted">Not yet</Pill>}</td><td>{sub?.status === 'graded' ? 'Yes' : 'No'}</td><td>{sub?.status === 'graded' && t.resultsReleased ? <b>{sub.score} / {t.maxMarks}</b> : '—'}</td></tr>;
+                  })}
                 </Table>
               </Card>
             )}

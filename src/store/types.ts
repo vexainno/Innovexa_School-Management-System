@@ -536,6 +536,61 @@ export interface FollowUp {
   done: boolean;
 }
 
+export type QuestionType = 'mcq' | 'true_false' | 'short' | 'essay' | 'file';
+
+export interface Question {
+  id: string;
+  type: QuestionType;
+  text: string;
+  options?: string[];
+  /** mcq: option index as string; true_false: 'true' | 'false'; short: accepted answers separated by | */
+  correct?: string;
+  points: number;
+  rubric?: string;
+}
+
+export interface Task {
+  id: string;
+  kind: 'assignment' | 'quiz';
+  title: string;
+  subject: string;
+  grade: number;
+  section: string;
+  teacherId: string;
+  instructions: string;
+  maxMarks: number;
+  status: 'draft' | 'published' | 'closed';
+  createdAt: string;
+  opensAt: string;
+  closesAt: string;
+  durationMin?: number;
+  shuffle?: boolean;
+  submissionType?: 'text' | 'file' | 'text_file';
+  latePolicy: 'not_accepted' | 'accepted_marked_late';
+  questions: Question[];
+  resultsReleased: boolean;
+}
+
+export interface SubmittedFile { name: string; size: number; type: string; dataUrl?: string }
+
+export interface Submission {
+  id: string;
+  taskId: string;
+  studentId: string;
+  startedAt: string;
+  submittedAt?: string;
+  status: 'in_progress' | 'submitted' | 'graded';
+  late: boolean;
+  answers: Record<string, string>;
+  text?: string;
+  files: SubmittedFile[];
+  autoScore?: number;
+  perQuestion?: Record<string, number>;
+  score?: number;
+  feedback?: string;
+  gradedAt?: string;
+}
+
 export interface SchoolState {
   version: number;
   school: {
@@ -558,6 +613,8 @@ export interface SchoolState {
   schedule: ScheduleConfig;
   accounts: Account[];
   bookRequests: BookRequest[];
+  tasks: Task[];
+  submissions: Submission[];
   reportTemplateFile?: { name: string; size: number; uploadedAt: string; active: boolean };
   students: SchoolStudent[];
   staff: StaffMember[];
