@@ -1,80 +1,94 @@
-# InnosysEdu Frontend
+# InnosysEdu — School Management Platform (Frontend)
 
-Frontend-only school management SaaS prototype for Innovexa TechHub. This project follows **InnosysEdu Frontend SRS v2.0** and the supplied master frontend prompt.
+Frontend for Innosys Academy's school management platform, built by Innovexa TechHub for Liberian schools.
+React 18 · TypeScript · Vite · Tailwind CSS · Lucide icons.
 
-## Scope and boundaries
+This repository is **frontend only**. All school records are realistic sample data held in one shared
+in-browser data store, so every workspace shows the same numbers and the workflows can be demonstrated end to end.
+No real payments, emails or SMS are sent.
 
-- React 18, TypeScript, Vite and Tailwind CSS.
-- One application with three experiences: Student & Parent, Staff, and Innovexa Platform Super Admin.
-- Twelve seeded demo identities, each with its own role dashboard and navigation.
-- Mock data and browser-local demonstration workflows only.
-- No backend, database schema, Supabase SQL/RLS, real authentication, payment processing, email/SMS delivery, or secrets are included.
-- The demo role switcher is compiled only in Vite development mode. Frontend role checks are a UX aid, not production security.
-
-## Run locally
+## Run
 
 ```bash
 npm install
-npm run dev
-```
-
-## Validate
-
-```bash
+npm run dev        # http://localhost:5173
 npm run typecheck
 npm run lint
-npm run build
+npm run build      # production build in dist/
+npm run preview    # serve the production build
 ```
 
-## Demo access
+`dist/` is a static site and can be hosted anywhere (Vercel, Netlify, Cloudflare Pages, S3). Routing uses
+`#/page` URLs, so no server rewrite rules are needed.
 
-In development, open **Show test accounts (development only)** on the unified login screen. Select an identity to fill its email. The shared demo password is `test1234`. After signing in, open the profile menu in the top-right and use **Demo workspace switcher** to move between seeded identities.
+## Demonstration accounts
 
-| Role | Demo email | Dashboard/workspace |
-|---|---|---|
-| Principal | `principal@innosys.edu` | School leadership and approval oversight |
-| Vice Principal | `vp@innosys.edu` | Daily operations, calendar and timetable |
-| Dean of Students | `dean@innosys.edu` | Discipline, attendance concerns and activities |
-| Registrar | `registrar@innosys.edu` | Student registration, records and guardians |
-| Academic Officer | `academic@innosys.edu` | Examinations, gradebooks and results processing |
-| Teacher | `teacher@innosys.edu` | Classes, attendance, assessments and gradebooks |
-| Counselor | `counselor@innosys.edu` | Restricted student support workspace |
-| Finance Officer | `finance@innosys.edu` | Fees, invoices, payments and reports |
-| Librarian | `librarian@innosys.edu` | Catalogue and circulation |
-| Innovexa Platform Super Admin | `admin@innosys.edu` | Platform administration preview |
-| Student | `student@innosys.edu` | Student learning and progress portal |
-| Parent / Guardian | `parent@innosys.edu` | Linked-child and family portal preview |
+The demonstration accounts are **not listed on the login screen**. They work in every build (development and
+production) so the platform can be shown to schools. All use the password the team already has.
+Sessions persist across refreshes when "Remember me" is ticked.
 
-These identities and records are synthetic preview data. They are not real accounts and the shared password must never be reused in production.
+## Workspaces (sidebars)
 
-## Project architecture additions
+| Role | Modules |
+|---|---|
+| Principal | Overview · School Information · Student Management · Teacher and Staff Management · Academic Overview · Attendance Reports · Financial Overview · Discipline Reports · Examination and Results · Report Card Approvals · Announcements · Administrative Reports · Settings |
+| Vice Principal | Overview · Teacher Attendance · Student Attendance · Class Monitoring · Teacher Timetables · Class Schedules · Daily Activities · Substitute Teacher Management · Student Movement and Supervision · Incident Reports · Staff Reports · Announcements (+ School Calendar from the dashboard) |
+| Academic Officer | Overview · Academic Structure · Academic Calendar · Classes and Sections · Subjects and Courses · Teacher Academic Assignments · Examination Management · Gradebook Processing · Grading Configuration · Report Card Management · Student Academic Records · Academic Performance · Academic Reports · Notifications · Settings |
+| Registrar | Overview · Student Registration · Admission Applications · Student Profiles · Parent and Guardian Records · Class Assignment · Student Promotion · Student Transfers · Withdrawals · Student Identification Numbers · Enrollment Reports · Academic Records Archive |
+| Finance Director | Overview · School Fee Structure · Student Fee Accounts · Record Payments · Generate Receipts · Outstanding Balances · Payment History · Discounts and Scholarships · Expenditure Management · Staff Salaries · Budget Management · Financial Reports · Reconciliation |
+| Dean of Students | Overview · Student Conduct · Disciplinary Cases · Incident Reports · Student Attendance Monitoring · Student Complaints · Student Leadership · Parent Notifications · Welfare Reports · Follow-up Actions |
+| Teacher | Overview · My Classes · My Subjects · My Timetable · Student Lists · Attendance · Assignments · Online Assessments · Assessment Questions · Submissions · Marking and Grading · Gradebook · Learning Materials · Academic Progress · Student Performance · Notifications · Communication |
+| Guidance Counselor | Existing counselor workspace; Student Support Notifications are delivered privately to the one selected student |
+| Librarian | Overview · Book Inventory · Add New Books · Book Categories · Student Borrowing · Book Returns · Overdue Books · Damaged and Missing Books · Student Library Accounts · Library Reports |
+| Parent / Guardian | Overview · My Children · Attendance · Academic Performance · Examination Results · Report Cards · Class Timetable · School Announcements · Teacher Communication · Fee Statement and Payment · Payment History · School Calendar · Notifications · Profile and Settings |
+| Student | Dashboard · Classes · Subjects · Timetable · Assignments · Resources · Attendance · Results · Report Card · Library · Counseling · Announcements · Notifications |
+| Innovexa Super Admin | Platform Overview · School Management · Create New School · School Configurations · Subscription Management · Platform Users · System Roles and Permissions · Platform Analytics · System Monitoring · Storage Management · Backup Management · Security and Audit Logs · Platform Settings · Support and Maintenance |
 
-- `src/services/authService.ts`: replaceable authentication contract with development-only mock sign-in adapter.
-- `src/services/authorization.ts`: central role permission map for frontend action visibility and UX checks.
-- `src/services/contracts.ts`: typed contracts for student, timetable, assessment, finance, payment, notification, library, attendance and school structure services.
-- `src/services/mockServices.ts`: mock adapters backed by the existing seeded fixtures. Payment checkout returns a simulated pending preview only.
-- `src/context/AuthContext.tsx`: session state, login, logout and development-only demo identity switching.
+Every dashboard card is clickable and opens the matching sidebar page.
 
-Existing role-specific pages, navigation, calendar/timetable integration, assessment pages, counselor workflows and seeded data have been retained.
+## The results workflow
 
-## Important workflow rules reflected in the UI baseline
+Teacher submits gradebook (Excel) → Principal opens and approves it → Academic Officer is notified, validates it
+(matching by student ID) and generates one gradesheet per student → Academic Officer reviews and submits the class
+batch (blocked while any gradesheet is outstanding) → Principal previews each gradesheet and authorizes release for the
+class section → Academic Officer releases → each student and their linked guardian see only their own report card.
 
-- Registrar records students after the school's offline admission process. There is no public online admissions portal.
-- Principal retains final gradebook/results approval unless a specific, scoped delegation is introduced.
-- Academic Officer processes approved gradebooks; the role does not bypass Principal approval.
-- Parent portal access is based on verified guardian relationships. A contact record or self-service request alone is not proof of guardianship.
-- Student records can exist without an activated student login.
-- Teachers' work is limited to assigned classes and subjects in the role-specific experience.
-- Counselor records are restricted and must not be surfaced as general dashboard content.
-- Payment, reminder, recovery, and communication actions are demonstrations only. No money moves and no messages/emails are delivered.
-- Historical academic and financial information should be archived, not silently hard-deleted.
+All counters (Pending, Approved, Awaiting Release, Released, etc.) are calculated from the same workflow state,
+so they always agree across workspaces.
 
-## Known limitations and next integration work
+## Other connected flows
 
-This is a frontend prototype, not a production deployment. Most seeded domain records are in-memory; a small number of existing workflows use browser-local persistence. Browser-local data does not synchronize across devices or browser profiles. The mock services are contracts and adapters for frontend integration; they do not imply a live backend.
+- Registrar registers a student → unique student ID + fee account created from the fee structure → Finance and teachers notified.
+- Finance records a payment → balance, payment history and receipt update → guardian notified → Principal's financial overview updates.
+- Teacher files an incident → Dean notified → investigation, outcome, referral to Principal/Counselor, full case history.
+- VP marks a teacher absent → arranges substitutes for that teacher's lessons → substitute and students notified → Class Monitoring updates.
+- Librarian looks up students by ID; borrowing and returns update availability automatically.
 
-Before production, a separate backend/authentication implementation must enforce tenant isolation, identity and membership validation, role/permission authorization, guardian verification, audit history, secure document storage, payment-provider tokenization and settlement confirmation, scheduled overdue reminders, and server-side quiz timing. Review each mock workflow and connect it to the corresponding service contract without exposing restricted student or counseling data.
+## Code map
 
-## Build status
+```
+src/store/        shared data model (types.ts), sample school (seed.ts), state + actions (store.ts), file export (files.ts)
+src/portals/      one module per workspace (principal, academic, vicePrincipal, registrar, finance, parent, dean,
+                  librarian, platform, teacher, student) + shared pages (notifications, announcements, calendar)
+src/components/   app shell, login, UI kit (kit.tsx), printable report card
+src/pages/        retained earlier screens (teacher assessments/marking, counselor, student portal)
+```
 
-Run the three validation commands above in an environment with dependencies installed. The delivery environment used to prepare this archive could not complete `npm ci` because package installation timed out; therefore a successful production build is **not claimed** for this archive.
+Each workspace loads on demand (code-split per role).
+
+## Connecting a backend later
+
+The UI reads from `useSchool()` and changes data only through `actions.*` in `src/store/store.ts`.
+Replace those functions with API calls (e.g. Supabase) and keep the same shapes in `src/store/types.ts`;
+screens do not need to change. Sign-in is behind `AuthService` in `src/services/authService.ts`.
+
+Before going live with real school data, the backend must enforce: authentication, school (tenant) isolation,
+role permissions, guardian verification, audit history, secure document storage, server-side report-card release,
+payment-provider checkout (no card details in the app), and a real notification provider.
+
+## Known limitations
+
+- Data is stored in the browser (`localStorage`); it is per device and per browser.
+- Uploaded gradebook files are kept for the current browser session only.
+- Online card/mobile-money checkout is a clearly labelled demonstration; no money moves.
+- PDF output uses the browser's "Print / Save as PDF"; spreadsheets download as `.csv` / `.xlsx`.

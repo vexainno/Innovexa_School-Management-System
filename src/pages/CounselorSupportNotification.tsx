@@ -21,6 +21,7 @@ import {
 } from '@/components/ui';
 
 import { useAuth } from '@/context/AuthContext';
+import { actions as schoolActions, activeStudents, className as sectionName, fmtDate as fmtSchoolDate, studentById, useSchool } from '@/store/store';
 
 import {
   getStudentRiskRecords,
@@ -188,6 +189,11 @@ export function CounselorSupportNotifications() {
   const selectedStudent = eligibleStudents.find(
     (student) => student.studentId === selectedStudentId
   );
+  const school = useSchool();
+  const allStudents = activeStudents(school).slice().sort((a, b) => a.grade - b.grade || a.section.localeCompare(b.section) || a.lastName.localeCompare(b.lastName));
+  const flagged = eligibleStudents.map((r) => studentById(school, r.studentId)).filter((x): x is NonNullable<typeof x> => Boolean(x && x.status === 'active'));
+  const privateSent = school.notifications.filter((n) => n.studentOnly && n.from === 'counselor');
+  const chosen = studentById(school, selectedStudentId);
 
   function resetComposer() {
     setSelectedStudentId('');
@@ -214,33 +220,25 @@ export function CounselorSupportNotifications() {
       return;
     }
 
-    try {
-      createStudentSupportNotification({
-        studentId: selectedStudentId,
-        title,
-        message,
-        nextSteps,
-        createdBy: user?.id ?? '',
-      });
-
-      refreshData();
-      resetComposer();
-      setShowComposer(false);
-
-      setFeedback({
-        type: 'success',
-        message:
-          'Support notification saved successfully. It will appear in the student inbox when that portal is connected.',
-      });
-    } catch (error) {
-      setFeedback({
-        type: 'error',
-        message:
-          error instanceof Error
-            ? error.message
-            : 'The notification could not be created.',
-      });
+    if (!chosen) {
+      setFeedback({ type: 'error', message: 'Please select a student.' });
+      return;
     }
+    const body = nextSteps.trim() ? `${message.trim()}\n\nSuggested next steps: ${nextSteps.trim()}` : message.trim();
+    schoolActions.sendPrivateStudentNotification(chosen.id, title.trim(), body, 'counselor');
+    try {
+      // Also keep the counselor's support-register history when the student has a reviewed record.
+      createStudentSupportNotification({ studentId: selectedStudentId, title, message, nextSteps, createdBy: user?.id ?? '' });
+    } catch {
+      /* not on the reviewed register: delivered privately, register entry not required */
+    }
+    refreshData();
+    resetComposer();
+    setShowComposer(false);
+    setFeedback({
+      type: 'success',
+      message: `Sent privately to ${chosen.name} (${sectionName(chosen.grade, chosen.section)}). Only this student can see it in their notifications.`,
+    });
   }
 
   function markFollowUp(
@@ -367,7 +365,7 @@ export function CounselorSupportNotifications() {
                 className="label"
                 htmlFor="support-student"
               >
-                Select reviewed student
+                Select student
               </label>
 
               <select
@@ -380,22 +378,27 @@ export function CounselorSupportNotifications() {
               >
                 <option value="">Choose a student</option>
 
-                {eligibleStudents.map((student) => (
-                  <option
-                    key={student.studentId}
-                    value={student.studentId}
-                  >
-                    {student.studentName} · {student.className} ·{' '}
-                    {student.level === 'at_risk'
-                      ? 'At risk'
-                      : 'Moderate support'}
-                  </option>
-                ))}
+                {flagged.length > 0 && (
+                  <optgroup label="Reviewed support register">
+                    {flagged.map((student) => (
+                      <option key={student.id} value={student.id}>
+                        {student.name} · {sectionName(student.grade, student.section)}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                <optgroup label="All enrolled students">
+                  {allStudents.map((student) => (
+                    <option key={student.id} value={student.id}>
+                      {student.name} · {sectionName(student.grade, student.section)} · {student.studentNo}
+                    </option>
+                  ))}
+                </optgroup>
               </select>
 
               <p className="text-xs text-navy-400 mt-1">
-                Only students with a counselor-reviewed support
-                record appear here.
+                Sent privately to this one student only. Parents,
+                classmates and other staff cannot see it.
               </p>
             </div>
 
@@ -513,7 +516,7 @@ export function CounselorSupportNotifications() {
                 }
               >
                 <Send className="inline w-4 h-4 mr-2" />
-                Save to student inbox
+                Send privately to student
               </button>
 
               <button
@@ -672,6 +675,26 @@ export function CounselorSupportNotifications() {
         or push notification is sent. Student acknowledgement will
         be available when the Student Portal is connected.
       </p>
+      <SectionCard title={`Delivered privately (${privateSent.length})`}>
+        {privateSent.length === 0 ? (
+          <p className="text-sm text-navy-500">Private notifications you send appear here.</p>
+        ) : (
+          <ul className="divide-y divide-navy-100">
+            {privateSent.map((n) => {
+              const st = studentById(school, n.toStudentIds?.[0] ?? '');
+              return (
+                <li key={n.id} className="py-3 flex flex-wrap items-start justify-between gap-2">
+                  <span>
+                    <span className="block text-sm font-medium text-navy-900">{n.title}</span>
+                    <span className="block text-xs text-navy-500">To {st?.name ?? 'student'} only · {fmtSchoolDate(n.createdAt)}</span>
+                  </span>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${n.readBy.length ? 'bg-success-100 text-success-700' : 'bg-navy-100 text-navy-700'}`}>{n.readBy.length ? 'Read by student' : 'Delivered'}</span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </SectionCard>
     </div>
   );
 }

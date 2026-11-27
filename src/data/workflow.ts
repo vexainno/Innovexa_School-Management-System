@@ -210,7 +210,8 @@ export function roleTitle(role: Role) {
 
 export async function saveGeneratedFile(content: BlobPart, suggestedName: string, mimeType = 'text/csv') {
   const blob = new Blob([content], { type: mimeType });
-  const picker = (window as any).showSaveFilePicker;
+  type SavePicker = (opts: unknown) => Promise<{ createWritable: () => Promise<{ write: (b: Blob) => Promise<void>; close: () => Promise<void> }> }>;
+  const picker = (window as unknown as { showSaveFilePicker?: SavePicker }).showSaveFilePicker;
   if (picker) {
     const ext = suggestedName.split('.').pop() || 'csv';
     const handle = await picker({

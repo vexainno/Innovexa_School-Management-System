@@ -16,7 +16,7 @@ export const TEST_ACCOUNTS: User[] = [
   { id: 'u9', name: 'Mrs. Elizabeth Kpannah', email: 'librarian@innosys.edu', role: 'librarian', title: 'Librarian', avatarColor: 'bg-navy-600' },
   { id: 'u10', name: 'Mr. Daniel Cooper', email: 'admin@innosys.edu', role: 'super_admin', title: 'Innovexa Platform Super Admin', avatarColor: 'bg-navy-800' },
   { id: 'u11', name: 'John K. Mensah', email: 'student@innosys.edu', role: 'student', title: 'Student — Grade 11', avatarColor: 'bg-accent-500' },
-  { id: 'u12', name: 'Mrs. Janet Mensah', email: 'parent@innosys.edu', role: 'parent', title: 'Parent / Guardian', avatarColor: 'bg-success-600', linkedStudentIds: ['s1', 's2'] },
+  { id: 'u12', name: 'Mrs. Janet Mensah', email: 'parent@innosys.edu', role: 'parent', title: 'Parent / Guardian', avatarColor: 'bg-success-600', linkedStudentIds: ['s1', 's2', 's16'] },
 ];
 
 export const STUDENTS: Student[] = [
@@ -195,7 +195,7 @@ export const SCHOOL_INFO = {
   phone: '+231 77 000 0000',
   email: 'info@innosysacademy.edu.lr',
   academicYear: '2026/2027',
-  currentTerm: 'First Term',
+  currentTerm: '',
   totalStudents: 177,
   totalStaff: 34,
   totalClasses: 6,

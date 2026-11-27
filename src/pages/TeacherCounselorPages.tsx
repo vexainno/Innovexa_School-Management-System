@@ -2,21 +2,18 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import {
   Users, BookOpen, CalendarCheck, FileText, ClipboardList, ClipboardEdit,
-  Library, MessageSquare, GraduationCap, CheckCircle2, AlertCircle,
-  Clock, Save, Send, Plus, Upload, FileSpreadsheet, Check, UsersRound,
-  CalendarDays, Pencil, X, CalendarClock, ShieldCheck, UserRoundPlus,
-  UploadCloud, Trash2, Loader2, Download,
+  Library, CheckCircle2, AlertCircle,
+  Clock, Save, Plus, Upload, CalendarDays, Pencil, X, CalendarClock, UploadCloud, Trash2, Loader2, Download,
 } from 'lucide-react';
-import { PageHeader, StatCard, SectionCard, EmptyState, Avatar, ProgressBar, Modal } from '@/components/ui';
+
+import { PageHeader, StatCard, SectionCard, EmptyState, Avatar, Modal } from '@/components/ui';
 import {
-  CLASSES, SUBJECTS, STUDENTS, ASSESSMENTS, GRADES, ATTENDANCE, ANNOUNCEMENTS,
-} from '@/data/mockData';
-import type { Assessment, AttendanceRecord } from '@/types';
+  CLASSES, SUBJECTS, STUDENTS, ASSESSMENTS, } from '@/data/mockData';
+import type { Assessment } from '@/types';
 import {
   getTeacherClasses, getTeacherSubjects, getSubjectAssignments,
-  getStudentsForClass, getAttendance, setAttendance, getGradebooks, setGradebooks,
-  type WorkflowAttendance, type WorkflowGradebook,
-} from '@/data/workflow';
+  getStudentsForClass, getAttendance, setAttendance, type WorkflowAttendance, } from '@/data/workflow';
+
 import {
   getCounselorCases, createCounselorCase, updateCounselorCase,
   getStudentRiskRecords, upsertStudentRisk,
@@ -26,7 +23,6 @@ import {
   type CounselorSupportCase, type SupportCaseCategory, type SupportCaseStatus,
   type StudentRiskLevel, type InterventionStatus, type CounselorAvailabilitySlot,
 } from '@/data/counselorWorkflow';
-import { ClassCalendarPanel } from '@/pages/SchoolCalendar';
 import {
   saveLearningResource, getLearningResources, deleteLearningResource,
   type LearningResource,
@@ -177,29 +173,8 @@ export function TeacherDashboard({ onNavigate }: { onNavigate: (page: string) =>
   );
 }
 
-export function TeacherClasses() {
-  const { user } = useAuth();
-  const teacherId = user?.id || '';
-  const sponsored = getTeacherClasses(teacherId);
-  const subjectClassIds = getTeacherSubjects(teacherId).map(subject => subject.classId);
-  const visibleIds = new Set([...sponsored.map(item => item.id), ...subjectClassIds]);
-  const classes = CLASSES.filter(item => visibleIds.has(item.id));
-  return <div className="space-y-6 animate-fade-in"><PageHeader title="My Classes" subtitle="Your assigned classes, timetables and published school dates." /><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{classes.map(c=><div key={c.id} className="card-hover p-5"><div className="p-3 rounded-xl bg-navy-100 text-navy-700 w-fit mb-3"><Users className="w-5 h-5" /></div><h3 className="font-semibold text-navy-800">{c.grade}{c.section}</h3><p className="text-sm text-navy-400 mt-1">{c.studentCount} students — {c.room}</p><div className="mt-3"><ProgressBar value={c.studentCount} max={35}/></div></div>)}</div>{classes.map(c=><ClassCalendarPanel key={c.id} classId={c.id} audience="teachers" />)}</div>;
-}
 
-export function TeacherSubjects() {
-  const subjects = getTeacherSubjects('u6');
-  return <div className="space-y-6 animate-fade-in"><PageHeader title="My Subjects" subtitle="Subjects assigned to you by the school." /><SectionCard title="Subjects"><table className="table-base"><thead><tr><th>Subject</th><th>Code</th><th>Class</th></tr></thead><tbody>{subjects.map(s=><tr key={s.id}><td className="font-medium text-navy-800">{s.name}</td><td>{s.code}</td><td>{s.className}</td></tr>)}</tbody></table></SectionCard></div>;
-}
 
-export function TeacherStudents() {
-  const subjects = getTeacherSubjects('u6');
-  const classIds = Array.from(new Set(subjects.map(s => s.classId)));
-  const classes = getTeacherClasses('u6').filter(c => classIds.includes(c.id) || getTeacherClasses('u6').some(x => x.id === c.id));
-  const [selectedClass, setSelectedClass] = useState(classes[0]?.id || '');
-  const students = selectedClass ? getStudentsForClass(selectedClass) : [];
-  return <div className="space-y-6 animate-fade-in"><PageHeader title="My Students" subtitle="Select a class to quickly view every student in the classes and subjects you teach." /><div className="max-w-md"><label className="label">Class / Section</label><select className="input" value={selectedClass} onChange={e=>setSelectedClass(e.target.value)}>{classes.map(c=><option key={c.id} value={c.id}>{c.grade}{c.section} — {c.name}</option>)}</select></div><SectionCard title={`Students (${students.length})`}><table className="table-base"><thead><tr><th>Student</th><th>Grade</th><th>Class</th><th>Roll No</th><th>Guardian</th></tr></thead><tbody>{students.map(s=><tr key={s.id}><td><div className="flex items-center gap-2"><Avatar name={s.name} color={s.photoColor} size="sm"/><span className="font-medium text-navy-800">{s.name}</span></div></td><td>{s.grade}</td><td>{s.class}</td><td>{s.rollNo}</td><td>{s.guardianName}</td></tr>)}</tbody></table></SectionCard></div>;
-}
 
 export function TeacherAttendance() {
   const classes = getTeacherClasses('u6');
@@ -218,7 +193,7 @@ export function TeacherAttendance() {
     const next = students.map(s => ({ id:`att-${today}-${selectedClass}-${session}-${s.id}`, studentId:s.id, studentName:s.name, classId:selectedClass, className:`${assignment.grade}${assignment.section}`, date:today, status:status[s.id] || 'present', session, recordedBy:'u6', sponsorId:'u6', sponsorName:'Mr. Peter Wleh', submittedAt:new Date().toISOString() } as WorkflowAttendance));
     const all=[...kept,...next]; setRecords(all); setAttendance(all); window.alert('Attendance saved and sent to the Principal and Vice Principal.');
   };
-  return <div className="space-y-6 animate-fade-in"><PageHeader title="Attendance" subtitle="The assigned class sponsor is the only teacher allowed to submit attendance for that class and session." action={<button onClick={saveNow} className="btn-primary"><Save className="w-4 h-4"/> Save Attendance</button>}/><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="label">Class</label><select className="input" value={selectedClass} onChange={e=>{setSelectedClass(e.target.value);setStatus({});}}>{classes.map(c=><option key={c.id} value={c.id}>{c.grade}{c.section} — {c.name}</option>)}</select></div><div><label className="label">Session</label><select className="input" value={session} onChange={e=>{setSession(e.target.value as any);setStatus({});}}><option value="morning">Morning</option><option value="afternoon">Afternoon</option><option value="evening">Evening</option></select></div></div><SectionCard title={`${classes.find(c=>c.id===selectedClass)?.grade}${classes.find(c=>c.id===selectedClass)?.section} — ${session} — ${today}`} action={<div className="flex gap-2"><button className="btn-secondary text-xs" onClick={()=>setAll('present')}>Mark All Present</button><button className="btn-secondary text-xs" onClick={()=>setAll('absent')}>Mark All Absent</button></div>}><div className="space-y-2">{students.map(s=>{const v=status[s.id]||'present';return <div key={s.id} className="flex items-center gap-3 p-3 rounded-lg border border-navy-100"><Avatar name={s.name} color={s.photoColor} size="sm"/><span className="text-sm font-medium text-navy-800 flex-1">{s.name}</span><div className="flex flex-wrap gap-1"><button onClick={()=>setStatus(p=>({...p,[s.id]:'present'}))} className={v==='present'?'badge-success':'btn-secondary text-xs'}>Present</button><button onClick={()=>setStatus(p=>({...p,[s.id]:'absent'}))} className={v==='absent'?'badge-error':'btn-secondary text-xs'}>Absent</button><button onClick={()=>setStatus(p=>({...p,[s.id]:'excused'}))} className={v==='excused'?'badge-info':'btn-secondary text-xs'}>Excuse</button><button onClick={()=>setStatus(p=>({...p,[s.id]:'late'}))} className={v==='late'?'badge-warning':'btn-secondary text-xs'}>Late</button></div></div>})}</div></SectionCard></div>;
+  return <div className="space-y-6 animate-fade-in"><PageHeader title="Attendance" subtitle="The assigned class sponsor is the only teacher allowed to submit attendance for that class and session." action={<button onClick={saveNow} className="btn-primary"><Save className="w-4 h-4"/> Save Attendance</button>}/><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="label">Class</label><select className="input" value={selectedClass} onChange={e=>{setSelectedClass(e.target.value);setStatus({});}}>{classes.map(c=><option key={c.id} value={c.id}>{c.grade}{c.section} — {c.name}</option>)}</select></div><div><label className="label">Session</label><select className="input" value={session} onChange={e=>{setSession(e.target.value as 'morning'|'afternoon'|'evening');setStatus({});}}><option value="morning">Morning</option><option value="afternoon">Afternoon</option><option value="evening">Evening</option></select></div></div><SectionCard title={`${classes.find(c=>c.id===selectedClass)?.grade}${classes.find(c=>c.id===selectedClass)?.section} — ${session} — ${today}`} action={<div className="flex gap-2"><button className="btn-secondary text-xs" onClick={()=>setAll('present')}>Mark All Present</button><button className="btn-secondary text-xs" onClick={()=>setAll('absent')}>Mark All Absent</button></div>}><div className="space-y-2">{students.map(s=>{const v=status[s.id]||'present';return <div key={s.id} className="flex items-center gap-3 p-3 rounded-lg border border-navy-100"><Avatar name={s.name} color={s.photoColor} size="sm"/><span className="text-sm font-medium text-navy-800 flex-1">{s.name}</span><div className="flex flex-wrap gap-1"><button onClick={()=>setStatus(p=>({...p,[s.id]:'present'}))} className={v==='present'?'badge-success':'btn-secondary text-xs'}>Present</button><button onClick={()=>setStatus(p=>({...p,[s.id]:'absent'}))} className={v==='absent'?'badge-error':'btn-secondary text-xs'}>Absent</button><button onClick={()=>setStatus(p=>({...p,[s.id]:'excused'}))} className={v==='excused'?'badge-info':'btn-secondary text-xs'}>Excuse</button><button onClick={()=>setStatus(p=>({...p,[s.id]:'late'}))} className={v==='late'?'badge-warning':'btn-secondary text-xs'}>Late</button></div></div>})}</div></SectionCard></div>;
 }
 
 export function TeacherAssignments() {
@@ -292,48 +267,7 @@ function CreateAssessmentModal({ onClose, onCreate }: { onClose: () => void; onC
   );
 }
 
-export function TeacherAssessments() {
-  return (
-    <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Assessments" subtitle="All assessment components." />
-      <SectionCard title="Assessment Components">
-        <table className="table-base">
-          <thead><tr><th>Title</th><th>Type</th><th>Subject</th><th>Class</th><th>Marks</th><th>Status</th></tr></thead>
-          <tbody>
-            {ASSESSMENTS.map((a) => (
-              <tr key={a.id}>
-                <td className="font-medium text-navy-800">{a.title}</td>
-                <td><span className="badge-info">{a.type}</span></td>
-                <td>{a.subjectName}</td><td>{a.className}</td><td>{a.totalMarks}</td>
-                <td><span className={a.status === 'graded' ? 'badge-success' : a.status === 'published' ? 'badge-info' : 'badge-warning'}>{a.status}</span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </SectionCard>
-    </div>
-  );
-}
 
-export function TeacherGradebook() {
-  const classes = getTeacherClasses('u6');
-  const subjects = getTeacherSubjects('u6');
-  const [selectedClass, setSelectedClass] = useState(classes[0]?.id || '');
-  const classSubjects = subjects.filter(s=>s.classId===selectedClass);
-  const [selectedSubject, setSelectedSubject] = useState(classSubjects[0]?.id || '');
-  const [session, setSession] = useState<'morning'|'afternoon'|'evening'>('morning');
-  const [file, setFile] = useState<File | null>(null);
-  const [submitted, setSubmitted] = useState(false);
-  const submit = async () => {
-    if (!file || !selectedClass || !selectedSubject) return;
-    const cls=classes.find(c=>c.id===selectedClass); const sub=subjects.find(s=>s.id===selectedSubject); if(!cls||!sub) return;
-    const current=getGradebooks();
-    const fileDataUrl=file.size <= 2_500_000 ? await new Promise<string>((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result));r.onerror=reject;r.readAsDataURL(file);}) : undefined;
-    const submission: WorkflowGradebook={id:`gs-${Date.now()}`,teacherName:'Mr. Peter Wleh',teacherId:'u6',subjectName:sub.name,subjectId:sub.id,className:`${cls.grade}${cls.section}`,classId:cls.id,term:'First Term 2026/2027',submittedDate:new Date().toISOString().slice(0,10),status:'submitted',studentCount:getStudentsForClass(cls.id).length,session,fileName:file.name,fileSize:file.size,fileType:file.type || 'Excel workbook',fileDataUrl};
-    setGradebooks([submission,...current]); setSubmitted(true); setFile(null);
-  };
-  return <div className="space-y-6 animate-fade-in"><PageHeader title="Gradebook Submission" subtitle="Select the class, subject, session, then upload the prepared Excel gradebook. It is sent directly to the Principal for review."/><SectionCard title="Submission Details"><div className="grid grid-cols-1 md:grid-cols-3 gap-4"><div><label className="label">Class</label><select className="input" value={selectedClass} onChange={e=>{setSelectedClass(e.target.value);setSelectedSubject('');}}>{classes.map(c=><option key={c.id} value={c.id}>{c.grade}{c.section}</option>)}</select></div><div><label className="label">Subject</label><select className="input" value={selectedSubject} onChange={e=>setSelectedSubject(e.target.value)}>{classSubjects.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></div><div><label className="label">Class Session</label><select className="input" value={session} onChange={e=>setSession(e.target.value as any)}><option value="morning">Morning</option><option value="afternoon">Afternoon</option><option value="evening">Evening</option></select></div></div><div className="mt-5"><label className="label">Gradebook file</label><label className="flex flex-col items-center justify-center gap-2 p-8 border-2 border-dashed border-navy-200 rounded-xl hover:bg-navy-50 cursor-pointer"><Upload className="w-7 h-7 text-navy-500"/><span className="text-sm font-medium text-navy-700">Choose Excel gradebook</span><span className="text-xs text-navy-400">.xlsx, .xls, .csv — prepared gradebook from your computer</span><input type="file" className="hidden" accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" onChange={e=>setFile(e.target.files?.[0]||null)}/></label>{file&&<div className="mt-3 p-3 rounded-lg bg-navy-50 flex items-center gap-3"><FileSpreadsheet className="w-5 h-5 text-navy-600"/><div className="flex-1"><p className="text-sm font-medium text-navy-800">{file.name}</p><p className="text-xs text-navy-400">{Math.round(file.size/1024)} KB</p></div><button onClick={()=>setFile(null)} className="text-navy-400 hover:text-error-600">×</button></div>}</div><div className="flex justify-end mt-5"><button onClick={submit} disabled={!file||!selectedSubject} className="btn-primary disabled:opacity-50"><Send className="w-4 h-4"/> Submit Grades</button></div>{submitted&&<div className="mt-4 p-3 rounded-lg bg-success-50 border border-success-200 text-sm text-success-700"><CheckCircle2 className="inline w-4 h-4 mr-2"/> Gradebook submitted successfully. The Principal can now view, approve, or reject it.</div>}</SectionCard></div>;
-}
 
 export function TeacherResources() {
   const { user } = useAuth();
@@ -378,6 +312,8 @@ export function TeacherResources() {
 
   useEffect(() => {
     void loadResources();
+    // loadResources only depends on teacherId; re-running on every render would loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teacherId]);
 
   function chooseFile(file?: File) {
@@ -778,27 +714,6 @@ export function TeacherResources() {
           </div>
         </Modal>
       )}
-    </div>
-  );
-}
-export function TeacherMessages() {
-  return (
-    <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Messages & Announcements" subtitle="Communicate with students and parents." />
-      <SectionCard title="Recent Messages">
-        <div className="space-y-3">
-          {ANNOUNCEMENTS.map((an) => (
-            <div key={an.id} className="p-4 rounded-lg border border-navy-100">
-              <div className="flex items-start justify-between mb-2">
-                <h3 className="font-semibold text-navy-800 text-sm">{an.title}</h3>
-                <span className="text-xs text-navy-400">{an.date}</span>
-              </div>
-              <p className="text-sm text-navy-600">{an.body}</p>
-              <p className="text-xs text-navy-400 mt-2">— {an.author}</p>
-            </div>
-          ))}
-        </div>
-      </SectionCard>
     </div>
   );
 }

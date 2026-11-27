@@ -1,9 +1,6 @@
 import { useState } from 'react';
 import { School, Mail, Lock, Eye, EyeOff, AlertCircle, ShieldCheck, KeyRound, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { TEST_ACCOUNTS } from '@/data/mockData';
-import { ROLE_TITLES } from '@/config/navigation';
-import type { Role } from '@/types';
 
 export function LoginPage() {
   const { login } = useAuth();
@@ -12,7 +9,7 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showAccounts, setShowAccounts] = useState(false);
+  const [remember, setRemember] = useState(true);
   const [showForgot, setShowForgot] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotSent, setForgotSent] = useState(false);
@@ -23,7 +20,7 @@ export function LoginPage() {
     setError('');
     setLoading(true);
     setTimeout(() => {
-      const result = login(email, password);
+      const result = login(email, password, remember);
       if (!result.success) {
         setError(result.error || 'Login failed');
       }
@@ -31,31 +28,12 @@ export function LoginPage() {
     }, 500);
   };
 
-  const quickLogin = (testEmail: string) => {
-    setEmail(testEmail);
-    setPassword('test1234');
-    setError('');
-  };
 
-  const testAccountsByRole: { role: Role; label: string }[] = [
-    { role: 'principal', label: 'Principal' },
-    { role: 'vice_principal', label: 'Vice Principal' },
-    { role: 'dean', label: 'Dean' },
-    { role: 'registrar', label: 'Registrar' },
-    { role: 'academic_officer', label: 'Academic Officer' },
-    { role: 'teacher', label: 'Teacher' },
-    { role: 'counselor', label: 'Counselor' },
-    { role: 'finance', label: 'Finance' },
-    { role: 'librarian', label: 'Librarian' },
-    { role: 'super_admin', label: 'Platform Super Admin' },
-    { role: 'student', label: 'Student' },
-    { role: 'parent', label: 'Parent' },
-  ];
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-navy-950">
       {/* Left panel — Branding */}
-      <div className="lg:w-1/2 flex items-center justify-center p-8 lg:p-16 relative overflow-hidden">
+      <div className="hidden lg:flex lg:w-1/2 items-center justify-center p-8 lg:p-16 relative overflow-hidden">
         {/* Decorative background */}
         <div className="absolute inset-0 bg-gradient-to-br from-navy-900 via-navy-800 to-navy-950" />
         <div className="absolute top-0 left-0 w-96 h-96 bg-navy-700/20 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
@@ -73,12 +51,9 @@ export function LoginPage() {
           </div>
 
           <h2 className="font-display font-bold text-3xl lg:text-4xl leading-tight mb-4">
-            A digital workplace for every role in your school.
+            A digital workplace for your school
           </h2>
-          <p className="text-navy-300 text-lg leading-relaxed mb-8">
-            Principals, teachers, students, parents, and staff — each sees only the tasks,
-            data, and actions that belong to their position.
-          </p>
+          <div className="mb-8" />
 
           <div className="space-y-3">
             {[
@@ -150,6 +125,7 @@ export function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-navy-400 hover:text-navy-700"
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -159,7 +135,7 @@ export function LoginPage() {
 
             <div className="flex items-center justify-between">
               <label className="flex items-center gap-2 text-sm text-navy-600 cursor-pointer">
-                <input type="checkbox" className="rounded border-navy-300 text-navy-700 focus:ring-navy-500" />
+                <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="rounded border-navy-300 text-navy-700 focus:ring-navy-500" />
                 Remember me
               </label>
               <button type="button" onClick={() => { setShowForgot(true); setForgotSent(false); setForgotError(''); }} className="text-sm text-navy-600 hover:text-navy-800 font-medium">
@@ -179,36 +155,7 @@ export function LoginPage() {
             </button>
           </form>
 
-          {/* Development-only preview accounts. Vite removes this block from production builds. */}
-          {import.meta.env.DEV && <div className="mt-8 pt-6 border-t border-navy-200">
-            <button
-              onClick={() => setShowAccounts(!showAccounts)}
-              className="text-sm text-navy-500 hover:text-navy-700 font-medium flex items-center gap-1"
-            >
-              {showAccounts ? 'Hide' : 'Show'} test accounts (development only)
-            </button>
-            {showAccounts && (
-              <div className="mt-4 grid grid-cols-2 gap-2 animate-slide-up">
-                {testAccountsByRole.map(({ role, label }) => {
-                  const account = TEST_ACCOUNTS.find((a) => a.role === role);
-                  if (!account) return null;
-                  return (
-                    <button
-                      key={role}
-                      onClick={() => quickLogin(account.email)}
-                      className="text-left px-3 py-2 rounded-lg border border-navy-200 hover:border-navy-400 hover:bg-navy-50 transition-all text-xs"
-                    >
-                      <p className="font-medium text-navy-700">{label}</p>
-                      <p className="text-navy-400 truncate">{account.email}</p>
-                    </button>
-                  );
-                })}
-                <p className="col-span-2 text-xs text-navy-400 mt-1">
-                  Demo password for all 12 accounts: <span className="font-mono font-medium text-navy-600">test1234</span>
-                </p>
-              </div>
-            )}
-          </div>}
+          
 
           <p className="mt-6 text-xs text-center text-navy-400">
             InnosysEdu — Powered by Innovexa TechHub
@@ -284,5 +231,3 @@ export function LoginPage() {
   );
 }
 
-export type { Role };
-export { ROLE_TITLES };

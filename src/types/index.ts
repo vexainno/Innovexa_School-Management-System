@@ -249,4 +249,5 @@ export interface NavItem {
   label: string;
   icon: string;
   page: string;
+  group?: string;
 }

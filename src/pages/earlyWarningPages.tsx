@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Activity, AlertTriangle, ArrowRight, BookOpen, CalendarDays, CheckCircle2,
-  ClipboardList, Filter, Info, RefreshCw, Search, ShieldAlert, UserRound,
+  Activity, AlertTriangle, ArrowRight, CheckCircle2,
+  Filter, Info, RefreshCw, Search, ShieldAlert, UserRound,
 } from 'lucide-react';
 import { PageHeader, SectionCard, StatCard, EmptyState } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';

@@ -68,12 +68,6 @@ function formatDate(value: string) {
   });
 }
 
-function formatShortDate(value: string) {
-  return parseISODate(value).toLocaleDateString(undefined, {
-    day: 'numeric',
-    month: 'short',
-  });
-}
 
 function getWeekRange(anchor: Date) {
   const start = new Date(anchor);
@@ -237,7 +231,7 @@ export function StudentAttendanceCalendar() {
       start: selectedDate,
       end: selectedDate,
     };
-  }, [view, selectedDate]);
+  }, [view, selectedDate, selectedDateObject]);
 
   const visibleRecords = myAttendance.filter(
     (record) =>
