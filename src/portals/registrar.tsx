@@ -5,8 +5,9 @@ import {
 } from '@/store/store';
 import type { SchoolStudent } from '@/store/types';
 import { downloadCsv, printHtml, tableHtml } from '@/store/files';
-import { Card, ClassSectionPicker, Dialog, Field, Header, Notice, Pill, SearchBox, StackedBars, Stat, Table } from '@/components/kit';
+import { Card, ClassSectionPicker, Dialog, Field, Header, Notice, Pill, SearchBox, StackedBars, Stat, Table, Tabs } from '@/components/kit';
 import { StudentProfileDialog } from './common';
+import { AccountsPanel, BulkImport, slipHtml } from './registrarImport';
 import { ContactLinks, greeting, useMe, type PageProps } from './shared';
 
 export function RegistrarOverview({ onNavigate }: PageProps) {
@@ -38,18 +39,38 @@ export function RegistrarOverview({ onNavigate }: PageProps) {
 
 const EMPTY = { firstName: '', lastName: '', gender: 'F' as 'M' | 'F', dob: '', grade: 7, section: 'A', guardianName: '', guardianRelation: 'Mother', guardianPhone: '', guardianEmail: '', address: '' };
 
-export function StudentRegistration({ onNavigate }: PageProps) {
+export function StudentRegistration(props: PageProps) {
+  const [tab, setTab] = useState<'single' | 'bulk' | 'accounts'>(props.param === 'bulk' ? 'bulk' : props.param === 'accounts' ? 'accounts' : 'single');
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <Header title="Student Registration" subtitle="Register one student, or import a whole list from Excel. Student IDs, fee accounts and portal accounts are created automatically." />
+      <Tabs tabs={[{ id: 'single', label: 'Register one student' }, { id: 'bulk', label: 'Bulk import from Excel' }, { id: 'accounts', label: 'Portal accounts and activation codes' }]} value={tab} onChange={setTab} />
+      {tab === 'single' && <SingleRegistration {...props} />}
+      {tab === 'bulk' && <BulkImport onDone={() => setTab('accounts')} />}
+      {tab === 'accounts' && <AccountsPanel />}
+    </div>
+  );
+}
+
+function SingleRegistration({ onNavigate }: PageProps) {
   const s = useSchool();
   const me = useMe();
   const [f, setF] = useState(EMPTY);
+  const [studentEmail, setStudentEmail] = useState('');
   const [done, setDone] = useState<string | null>(null);
   const valid = f.firstName.trim() && f.lastName.trim() && f.dob && f.guardianName.trim() && /^\+?[\d\s]{7,}$/.test(f.guardianPhone);
   const created = done ? studentById(s, done) : null;
   const fee = created ? feeAccount(s, created.id) : null;
   const set = (k: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF({ ...f, [k]: k === 'grade' ? Number(e.target.value) : e.target.value });
+  const accts = created ? s.accounts.filter((a) => a.studentIds.includes(created.id) && a.status === 'invited') : [];
+  const register = () => {
+    const id = actions.registerStudent(f, me.name);
+    if (studentEmail.trim()) actions.createAccount({ email: studentEmail, name: `${f.firstName} ${f.lastName}`, role: 'student', studentIds: [id], createdBy: me.name });
+    if (f.guardianEmail.trim()) { actions.createAccount({ email: f.guardianEmail, name: f.guardianName, role: 'parent', studentIds: [id], createdBy: me.name }); actions.updateStudent(id, { parentLinked: true }); }
+    setDone(id);
+  };
   return (
-    <div className="space-y-6 animate-fade-in">
-      <Header title="Student Registration" subtitle="Register a student after the school's admission decision. A unique student ID and a fee account are created automatically." />
+    <div className="space-y-6">
       {created && fee && (
         <Card>
           <div className="flex items-start gap-3">
@@ -57,7 +78,8 @@ export function StudentRegistration({ onNavigate }: PageProps) {
             <div className="flex-1">
               <p className="font-semibold text-navy-900">{created.name} registered — Student ID <span className="font-mono">{created.studentNo}</span></p>
               <p className="text-sm text-navy-600 mt-1">Placed in {className(created.grade, created.section)}. Fee account created from the configured fee structure: <b>{money(fee.charged)}</b> (balance {money(fee.balance)}). The Finance Director and class teachers were notified automatically.</p>
-              <div className="flex gap-2 mt-3"><button type="button" className="btn-secondary text-sm" onClick={() => onNavigate('profiles')}>Open profiles</button><button type="button" className="btn-secondary text-sm" onClick={() => { setDone(null); setF(EMPTY); }}>Register another</button></div>
+              {accts.length > 0 && <div className="mt-3 rounded-lg bg-navy-50 p-3 text-sm">{accts.map((a) => <p key={a.id}>{a.role === 'parent' ? 'Parent' : 'Student'} login: <b>{a.email}</b> · activation code <span className="font-mono font-bold">{a.activationCode}</span></p>)}</div>}
+              <div className="flex flex-wrap gap-2 mt-3">{accts.length > 0 && <button type="button" className="btn-primary text-sm" onClick={() => printHtml('Activation slips', slipHtml(s, accts))}><Printer className="w-4 h-4" /> Print activation slips</button>}<button type="button" className="btn-secondary text-sm" onClick={() => onNavigate('profiles')}>Open profiles</button><button type="button" className="btn-secondary text-sm" onClick={() => { setDone(null); setF(EMPTY); setStudentEmail(''); }}>Register another</button></div>
             </div>
           </div>
         </Card>
@@ -75,10 +97,11 @@ export function StudentRegistration({ onNavigate }: PageProps) {
             <Field label="Guardian full name"><input className="input" value={f.guardianName} onChange={set('guardianName')} /></Field>
             <Field label="Relationship"><select className="input" value={f.guardianRelation} onChange={set('guardianRelation')}>{['Mother', 'Father', 'Guardian', 'Uncle', 'Aunt', 'Grandparent', 'Sibling'].map((x) => <option key={x}>{x}</option>)}</select></Field>
             <Field label="Guardian phone"><input className="input" value={f.guardianPhone} onChange={set('guardianPhone')} placeholder="+231 77 000 0000" /></Field>
-            <Field label="Guardian email (optional)"><input type="email" className="input" value={f.guardianEmail} onChange={set('guardianEmail')} /></Field>
+            <Field label="Guardian email (for parent portal login)"><input type="email" className="input" value={f.guardianEmail} onChange={set('guardianEmail')} /></Field>
+            <Field label="Student email (for student portal login)"><input type="email" className="input" value={studentEmail} onChange={(e) => setStudentEmail(e.target.value)} /></Field>
           </div>
-          <p className="text-xs text-navy-400 mt-3">Recording guardian details does not give portal access. Parent accounts are linked separately after verification.</p>
-          <div className="flex justify-end mt-4"><button type="button" className="btn-primary" disabled={!valid} onClick={() => setDone(actions.registerStudent(f, me.name))}><UserPlus className="w-4 h-4" /> Register student</button></div>
+          <p className="text-xs text-navy-400 mt-3">When an email is given, a portal account is created with an activation code. The student or parent signs in with that email and creates their own password.</p>
+          <div className="flex justify-end mt-4"><button type="button" className="btn-primary" disabled={!valid} onClick={register}><UserPlus className="w-4 h-4" /> Register student</button></div>
         </Card>
       )}
     </div>
@@ -170,8 +193,8 @@ export function GuardianRecords() {
           {list.slice(0, 60).map((x) => <tr key={x.id}><td className="font-medium">{x.guardianName}{(families.get(x.guardianPhone) ?? 0) > 1 && <p className="text-xs text-navy-500">{families.get(x.guardianPhone)} children enrolled</p>}</td><td>{x.guardianRelation}</td><td><ContactLinks phone={x.guardianPhone} email={x.guardianEmail} /></td><td>{x.name}</td><td>{className(x.grade, x.section)}</td><td>{x.parentLinked ? <Pill tone="success">Linked</Pill> : <Pill tone="muted">Not linked</Pill>}</td><td>{!x.parentLinked && <button type="button" className="btn-secondary text-xs py-1.5" onClick={() => { setLinking(x.id); setVerified(false); }}>Link account</button>}</td></tr>)}
         </Table>
       </Card>
-      <Dialog open={!!st} onClose={() => setLinking(null)} title="Link parent account" footer={<><button type="button" className="btn-secondary" onClick={() => setLinking(null)}>Cancel</button><button type="button" className="btn-primary" disabled={!verified} onClick={() => { if (st) actions.updateStudent(st.id, { parentLinked: true }); setLinking(null); }}>Link account</button></>}>
-        {st && <div className="space-y-3 text-sm"><p>Link <b>{st.guardianName}</b> ({st.guardianRelation}) to <b>{st.name}</b>, {className(st.grade, st.section)}.</p><p className="text-navy-500">The parent will see only this child's permitted records: attendance, published results, released report cards, fees and school messages.</p><label className="flex items-start gap-2"><input type="checkbox" checked={verified} onChange={(e) => setVerified(e.target.checked)} className="mt-1" /> I have verified the guardian's identity and relationship (ID card and birth certificate or court document).</label></div>}
+      <Dialog open={!!st} onClose={() => setLinking(null)} title="Link parent account" footer={<><button type="button" className="btn-secondary" onClick={() => setLinking(null)}>Cancel</button><button type="button" className="btn-primary" disabled={!verified} onClick={() => { if (st) { actions.updateStudent(st.id, { parentLinked: true }); if (st.guardianEmail) actions.createAccount({ email: st.guardianEmail, name: st.guardianName, role: 'parent', studentIds: [st.id], createdBy: 'Registrar' }); } setLinking(null); }}>Link account</button></>}>
+        {st && <div className="space-y-3 text-sm"><p>Link <b>{st.guardianName}</b> ({st.guardianRelation}) to <b>{st.name}</b>, {className(st.grade, st.section)}.</p><p className="text-navy-500">The parent will see only this child's permitted records: attendance, published results, released report cards, fees and school messages.</p><p className="text-navy-500">{st.guardianEmail ? `A parent login is created for ${st.guardianEmail}. Find the activation code under Student Registration → Portal accounts.` : 'Add the guardian\'s email in Student Profiles first so they can get a login.'}</p><label className="flex items-start gap-2"><input type="checkbox" checked={verified} onChange={(e) => setVerified(e.target.checked)} className="mt-1" /> I have verified the guardian's identity and relationship (ID card and birth certificate or court document).</label></div>}
       </Dialog>
     </div>
   );

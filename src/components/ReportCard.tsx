@@ -1,4 +1,7 @@
-import { Printer } from 'lucide-react';
+import { useState } from 'react';
+import { FileDown, Printer } from 'lucide-react';
+import { reportCardDocx } from '@/store/docxTemplate';
+import { downloadBlob } from '@/store/files';
 import type { SchoolState } from '@/store/types';
 import { attendanceSummary, className, letterFor, roster, schoolDays, staffName, studentAverage, studentById, subjectTotals } from '@/store/store';
 import { esc, printHtml } from '@/store/files';
@@ -25,7 +28,8 @@ export function ReportCardView({ school, studentId }: { school: SchoolState; stu
   const print = () => printHtml(`Report card — ${d.st.name}`, reportCardHtml(school, studentId));
   return (
     <div>
-      <div className="flex justify-end mb-3">
+      <div className="flex flex-wrap justify-end gap-2 mb-3">
+        {school.reportTemplateFile?.active && <DocxButton school={school} studentId={studentId} fileName={`Report_card_${d.st.studentNo}.docx`} />}
         <button type="button" className="btn-secondary text-sm" onClick={print}><Printer className="w-4 h-4" /> Print / Save as PDF</button>
       </div>
       <div className="border-2 rounded-lg p-5 sm:p-7 bg-white" style={{ borderColor: t.accent }}>
@@ -86,6 +90,17 @@ export function ReportCardView({ school, studentId }: { school: SchoolState; stu
         <p className="text-[11px] text-navy-400 mt-4 text-center">Calculated with grading configuration v{school.grading.version} ({school.grading.averageMethod} average). Subject totals are as submitted by subject teachers and approved by the Principal.</p>
       </div>
     </div>
+  );
+}
+
+function DocxButton({ school, studentId, fileName }: { school: SchoolState; studentId: string; fileName: string }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  return (
+    <span className="flex items-center gap-2">
+      {err && <span className="text-xs text-error-600">{err}</span>}
+      <button type="button" className="btn-primary text-sm" disabled={busy} onClick={async () => { setBusy(true); setErr(''); try { const b = await reportCardDocx(school, studentId); if (b) downloadBlob(b, fileName); else setErr('Template not available on this device.'); } catch { setErr('Could not fill the template.'); } finally { setBusy(false); } }}><FileDown className="w-4 h-4" /> {busy ? 'Preparing…' : 'Download report card (school design)'}</button>
+    </span>
   );
 }
 

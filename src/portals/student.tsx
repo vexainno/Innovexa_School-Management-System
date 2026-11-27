@@ -1,6 +1,8 @@
-import { BookOpen, FileBadge } from 'lucide-react';
-import { batchStage, BATCH_LABEL, className, fmtDate, studentById, studentIdForUser, useSchool } from '@/store/store';
-import { Card, Header, Notice, Pill, Table } from '@/components/kit';
+import { useState } from 'react';
+import { FileBadge } from 'lucide-react';
+import { actions, batchStage, BATCH_LABEL, className, fmtDate, studentById, studentIdForUser, useSchool } from '@/store/store';
+import { Card, Dialog, Header, Notice, Pill, SearchBox, Table } from '@/components/kit';
+import { BookCover } from '@/components/BookCover';
 import { ReportCardView } from '@/components/ReportCard';
 import { SectionTimetable } from './academic';
 import { useMe } from './shared';
@@ -58,21 +60,69 @@ export function StudentLibrary() {
   const me = useMe();
   const s = useSchool();
   const id = studentIdForUser(me);
+  const [q, setQ] = useState('');
+  const [cat, setCat] = useState('');
+  const [book, setBook] = useState<string | null>(null);
+  const [note, setNote] = useState('');
+  const [flash, setFlash] = useState('');
   const loans = s.loans.filter((l) => l.studentId === id);
+  const requests = s.bookRequests.filter((r) => r.studentId === id);
   const today = new Date().toISOString().slice(0, 10);
+  const avail = (bid: string) => { const b = s.books.find((x) => x.id === bid)!; return Math.max(0, b.copies - s.loans.filter((l) => l.bookId === bid && !l.returnedAt).length); };
+  const cats = [...new Set(s.books.map((b) => b.category))].sort();
+  const list = s.books.filter((b) => (!cat || b.category === cat) && `${b.title} ${b.author} ${b.category}`.toLowerCase().includes(q.toLowerCase()));
+  const sel = s.books.find((b) => b.id === book);
+  const pending = (bid: string) => requests.some((r) => r.bookId === bid && (r.status === 'pending' || r.status === 'approved'));
   return (
     <div className="space-y-6 animate-fade-in">
-      <Header title="Library" subtitle="Books currently borrowed and your borrowing history." />
-      <Card title="My loans">
-        <Table head={['Book', 'Borrowed', 'Due', 'Status']} empty="You have no library loans.">
-          {loans.map((l) => { const b = s.books.find((x) => x.id === l.bookId); const overdue = !l.returnedAt && l.dueAt < today; return <tr key={l.id}><td className="font-medium"><BookOpen className="inline w-4 h-4 mr-1 text-navy-400" />{b?.title}</td><td>{fmtDate(l.borrowedAt)}</td><td>{fmtDate(l.dueAt)}</td><td>{l.returnedAt ? <Pill tone="success">Returned {fmtDate(l.returnedAt)}</Pill> : overdue ? <Pill tone="error">Overdue</Pill> : <Pill tone="warning">On loan</Pill>}</td></tr>; })}
-        </Table>
+      <Header title="Library" subtitle="Browse the school library and book a copy. The librarian confirms when it's ready to collect." />
+      {flash && <Notice tone="success">{flash}</Notice>}
+      {(requests.length > 0 || loans.some((l) => !l.returnedAt)) && (
+        <div className="grid lg:grid-cols-2 gap-6">
+          <Card title="My book requests">
+            <Table head={['Book', 'Requested', 'Status', '']} empty="No requests yet.">
+              {requests.map((r) => { const b = s.books.find((x) => x.id === r.bookId); return <tr key={r.id}><td className="font-medium">{b?.title}</td><td className="text-xs">{fmtDate(r.requestedAt)}</td><td>{r.status === 'approved' ? <Pill tone="success">Ready — collect by {fmtDate(r.pickupBy)}</Pill> : r.status === 'pending' ? <Pill tone="warning">Waiting for librarian</Pill> : r.status === 'collected' ? <Pill>Collected</Pill> : <Pill tone="muted">{r.status}</Pill>}{r.status === 'declined' && r.note && <p className="text-xs text-navy-500">{r.note}</p>}</td><td>{r.status === 'pending' && <button type="button" className="text-xs text-error-600 hover:underline" onClick={() => actions.decideBookRequest(r.id, 'cancelled')}>Cancel</button>}</td></tr>; })}
+            </Table>
+          </Card>
+          <Card title="Books I have">
+            <Table head={['Book', 'Due', 'Status']} empty="You have no books on loan.">
+              {loans.filter((l) => !l.returnedAt).map((l) => { const b = s.books.find((x) => x.id === l.bookId); return <tr key={l.id}><td className="font-medium">{b?.title}</td><td>{fmtDate(l.dueAt)}</td><td>{l.dueAt < today ? <Pill tone="error">Overdue</Pill> : <Pill tone="warning">On loan</Pill>}</td></tr>; })}
+            </Table>
+          </Card>
+        </div>
+      )}
+      <Card title="Catalogue" action={<div className="flex flex-wrap gap-2"><div className="w-60"><SearchBox value={q} onChange={setQ} placeholder="Title, author or subject" /></div><select className="input py-2 text-sm w-40" value={cat} onChange={(e) => setCat(e.target.value)} aria-label="Subject"><option value="">All subjects</option>{cats.map((c) => <option key={c}>{c}</option>)}</select></div>}>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          {list.map((b) => { const a = avail(b.id); return (
+            <button key={b.id} type="button" onClick={() => { setBook(b.id); setNote(''); }} className="text-left group">
+              <BookCover book={b} />
+              <p className="mt-2 text-sm font-semibold text-navy-900 line-clamp-2 group-hover:underline">{b.title}</p>
+              <p className="text-xs text-navy-500">{b.author}</p>
+              <p className={`text-xs mt-0.5 ${a ? 'text-success-700' : 'text-error-600'}`}>{a ? `${a} available` : 'All copies on loan'}</p>
+            </button>
+          ); })}
+        </div>
+        {!list.length && <p className="text-sm text-navy-500">No books match your search.</p>}
       </Card>
-      <Card title="Catalogue">
-        <Table head={['Title', 'Author', 'Subject', 'Available']}>
-          {s.books.map((b) => { const out = s.loans.filter((l) => l.bookId === b.id && !l.returnedAt).length; return <tr key={b.id}><td>{b.title}</td><td>{b.author}</td><td>{b.category}</td><td>{Math.max(0, b.copies - out)} of {b.copies}</td></tr>; })}
-        </Table>
-      </Card>
+      <Dialog open={!!sel} onClose={() => setBook(null)} wide title={sel?.title ?? ''} footer={sel && <>
+        <button type="button" className="btn-secondary" onClick={() => setBook(null)}>Close</button>
+        <button type="button" className="btn-primary" disabled={pending(sel.id)} onClick={() => { actions.requestBook(sel.id, id, note.trim()); setFlash(`Request sent for "${sel.title}". You'll be notified when it's ready to collect.`); setBook(null); }}>{pending(sel.id) ? 'Already requested' : avail(sel.id) ? 'Book this' : 'Join the waiting list'}</button>
+      </>}>
+        {sel && (
+          <div className="grid sm:grid-cols-[160px_1fr] gap-5">
+            <BookCover book={sel} />
+            <div className="space-y-2 text-sm">
+              <p><span className="text-navy-500">Author:</span> {sel.author}</p>
+              <p><span className="text-navy-500">Subject:</span> {sel.category}</p>
+              <p><span className="text-navy-500">Book ID:</span> {sel.bookNo} · <span className="text-navy-500">Shelf:</span> {sel.shelf}</p>
+              <p><span className="text-navy-500">Published:</span> {sel.year} · <span className="text-navy-500">ISBN:</span> {sel.isbn}</p>
+              <p><span className="text-navy-500">Availability:</span> {avail(sel.id)} of {sel.copies} copies</p>
+              {sel.description && <p className="text-navy-700 pt-2">{sel.description}</p>}
+              <label className="block pt-2"><span className="label">Note to the librarian (optional)</span><input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. I need it for my project" /></label>
+            </div>
+          </div>
+        )}
+      </Dialog>
     </div>
   );
 }

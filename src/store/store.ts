@@ -1,27 +1,33 @@
 import { useSyncExternalStore } from 'react';
 import type { Role, User } from '@/types';
-import { buildSeed, feeTotal, SEED_VERSION, teacherTotal, todayISO } from './seed';
+import { buildFreshSchool, buildSeed, feeTotal, roomFor, SEED_VERSION, teacherTotal, todayISO } from './seed';
 import type {
+  Payment,
+  Account, DayBlock, MobileMoneyWallet, WeekDay,
   Announcement, AppNotification, Audience, BatchStatus, Book, Expense, Gradebook, GradingConfig, Incident,
   MarkRow, ReportTemplate, SchoolState, SchoolStudent, StaffAttendance, Substitution,
 } from './types';
 
-const KEY = 'innosysedu.school.v3';
+/** A real school deployment starts empty: set VITE_START_FRESH=true (and VITE_SCHOOL_NAME) at build time. */
+export const FRESH = import.meta.env.VITE_START_FRESH === 'true';
+const SCHOOL_NAME = (import.meta.env.VITE_SCHOOL_NAME as string | undefined) || 'Your School';
+const KEY = FRESH ? 'innosysedu.live.v1' : 'innosysedu.school.v3';
+const initial = () => (FRESH ? buildFreshSchool(SCHOOL_NAME) : buildSeed());
 
 function load(): SchoolState {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as SchoolState;
-      if (parsed.version === SEED_VERSION) return parsed;
+      if (FRESH || parsed.version === SEED_VERSION) return parsed;
     }
   } catch {
     /* corrupted or unavailable storage: fall back to the seed */
   }
-  return buildSeed();
+  return initial();
 }
 
-let state: SchoolState = typeof window === 'undefined' ? buildSeed() : load();
+let state: SchoolState = typeof window === 'undefined' ? initial() : load();
 const listeners = new Set<() => void>();
 
 /** Original files uploaded in this browser session (not persisted: files never go to localStorage). */
@@ -44,7 +50,7 @@ function update(recipe: (draft: SchoolState) => void) {
 }
 
 export function resetSchoolData() {
-  state = buildSeed();
+  state = initial();
   persist();
   listeners.forEach((l) => l());
 }
@@ -72,6 +78,13 @@ export const getSchool = () => state;
 /* ------------------------------ helpers ------------------------------ */
 
 let counter = 0;
+const activationCode = () => String(Math.floor(100000 + Math.random() * 900000));
+
+export interface ImportRow {
+  firstName: string; lastName: string; gender: 'M' | 'F'; dob: string; grade: number; section: string;
+  studentEmail: string; parentName: string; parentEmail: string; parentPhone: string; relationship: string;
+  address: string; existingStudentNo: string; yearEntered: number | null;
+}
 const uid = (p: string) => `${p}-${Date.now().toString(36)}-${(counter++).toString(36)}`;
 const now = () => new Date().toISOString();
 
@@ -89,6 +102,7 @@ export const fmtDate = (iso?: string) => {
 
 export function allSections(s: SchoolState) {
   const map = new Map<string, { grade: number; section: string }>();
+  for (const c of s.school.classes ?? []) for (const sec of c.sections) map.set(sectionKey(c.grade, sec), { grade: c.grade, section: sec });
   for (const st of s.students) map.set(sectionKey(st.grade, st.section), { grade: st.grade, section: st.section });
   return [...map.values()].sort((a, b) => a.grade - b.grade || a.section.localeCompare(b.section));
 }
@@ -289,7 +303,15 @@ export function notificationsFor(s: SchoolState, user: User): AppNotification[] 
     })
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
-export const studentIdForUser = (user: User) => (user.role === 'student' ? 's1' : user.linkedStudentIds?.[0] ?? '');
+export const studentIdForUser = (user: User) => user.linkedStudentIds?.[0] ?? (user.role === 'student' && user.id === 'u11' ? 's1' : '');
+
+/** The school day: lesson blocks are numbered 1..n and timetable slots refer to that number. */
+export const lessonBlocks = (s: SchoolState) => s.schedule.blocks.filter((b) => b.kind === 'lesson');
+export const fmtTime = (t: string) => {
+  const [h, m] = t.split(':').map(Number);
+  return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+};
+export const blockTime = (b: DayBlock) => `${fmtTime(b.start)}–${fmtTime(b.end)}`;
 
 function notify(d: SchoolState, n: Omit<AppNotification, 'id' | 'createdAt' | 'readBy'>) {
   d.notifications.unshift({ ...n, id: uid('n'), createdAt: now(), readBy: [] });
@@ -512,7 +534,7 @@ export const actions = {
   },
 
   /* Finance */
-  recordPayment(input: { studentId: string; amount: number; method: 'Cash' | 'Bank deposit' | 'Mobile money' | 'Card (demo)'; reference: string; by: string }) {
+  recordPayment(input: { studentId: string; amount: number; method: Payment['method']; reference: string; by: string }) {
     let receiptNo = '';
     update((d) => {
       const next = 1001 + d.payments.length;
@@ -520,7 +542,7 @@ export const actions = {
       d.payments.push({ id: uid('pay'), receiptNo, studentId: input.studentId, amount: input.amount, method: input.method, reference: input.reference || '—', date: todayISO(), recordedBy: input.by });
       const st = d.students.find((x) => x.id === input.studentId);
       notify(d, { title: `Payment received — ${money(input.amount)}`, body: `${st?.name ?? 'Student'}: receipt ${receiptNo} is available to download.`, link: 'payment-history', toStudentIds: [input.studentId] });
-      if (input.method === 'Card (demo)') notify(d, { title: `Online payment — ${st?.name ?? ''}`, body: `${money(input.amount)} demo card payment. Receipt ${receiptNo}.`, link: 'payment-history', toRoles: ['finance'] });
+      if (/Card|online/i.test(input.method + input.by)) notify(d, { title: `Online payment — ${st?.name ?? ''}`, body: `${money(input.amount)} demo card payment. Receipt ${receiptNo}.`, link: 'payment-history', toRoles: ['finance'] });
     });
     return receiptNo;
   },
@@ -572,10 +594,54 @@ export const actions = {
   updateSubstitution(id: string, patch: Partial<Substitution>) {
     update((d) => { const s = d.substitutions.find((x) => x.id === id); if (s) Object.assign(s, patch); });
   },
-  setTimetableSlot(match: { day: string; period: number; grade: number; section: string }, patch: { subject: string; teacherId: string }) {
+  setTimetableSlot(match: { day: WeekDay; period: number; grade: number; section: string }, patch: { subject: string; teacherId: string; room?: string }) {
     update((d) => {
       const s = d.timetable.find((x) => x.day === match.day && x.period === match.period && x.grade === match.grade && x.section === match.section);
+      if (!patch.subject) { d.timetable = d.timetable.filter((x) => x !== s); return; }
       if (s) Object.assign(s, patch);
+      else d.timetable.push({ ...match, subject: patch.subject, teacherId: patch.teacherId, room: patch.room ?? roomFor(match.grade, match.section) });
+      if (d.schedule.status === 'published') d.schedule.status = 'draft';
+    });
+  },
+  setScheduleBlocks(blocks: DayBlock[]) {
+    update((d) => {
+      const oldLessons = d.schedule.blocks.filter((b) => b.kind === 'lesson').map((b) => b.id);
+      const newLessons = blocks.filter((b) => b.kind === 'lesson').map((b) => b.id);
+      // Re-number timetable slots so each lesson stays attached to the same time block
+      const map = new Map<number, number>();
+      oldLessons.forEach((id, i) => { const j = newLessons.indexOf(id); if (j >= 0) map.set(i + 1, j + 1); });
+      d.timetable = d.timetable.filter((t) => map.has(t.period)).map((t) => ({ ...t, period: map.get(t.period)! }));
+      d.schedule.blocks = blocks;
+      d.schedule.status = 'draft';
+    });
+  },
+  setScheduleDays(days: WeekDay[]) {
+    update((d) => { d.schedule.days = days; d.timetable = d.timetable.filter((t) => days.includes(t.day)); d.schedule.status = 'draft'; });
+  },
+  copyDay(grade: number, section: string, from: WeekDay, to: WeekDay) {
+    update((d) => {
+      d.timetable = d.timetable.filter((t) => !(t.grade === grade && t.section === section && t.day === to));
+      d.timetable.push(...d.timetable.filter((t) => t.grade === grade && t.section === section && t.day === from).map((t) => ({ ...t, day: to })));
+      d.schedule.status = 'draft';
+    });
+  },
+  clearSectionTimetable(grade: number, section: string) {
+    update((d) => { d.timetable = d.timetable.filter((t) => !(t.grade === grade && t.section === section)); d.schedule.status = 'draft'; });
+  },
+  publishSchedule(effectiveFrom: string, by: string) {
+    update((d) => {
+      d.schedule.status = 'published';
+      d.schedule.publishedAt = now();
+      d.schedule.effectiveFrom = effectiveFrom;
+      notify(d, { title: 'Weekly timetable published', body: `${by} published the school timetable, effective ${fmtDate(effectiveFrom)}.`, toRoles: ['teacher', 'student', 'parent', 'principal', 'academic_officer'], link: 'timetable' });
+    });
+  },
+  addSection(grade: number, section: string) {
+    update((d) => {
+      const c = d.school.classes.find((x) => x.grade === grade);
+      if (c) { if (!c.sections.includes(section)) c.sections.push(section); c.sections.sort(); }
+      else d.school.classes.push({ grade, sections: [section] });
+      d.school.classes.sort((a, b) => a.grade - b.grade);
     });
   },
   addOpsLog(entry: Omit<SchoolState['opsLog'][number], 'id' | 'at'>) {
@@ -701,6 +767,154 @@ export const actions = {
   },
   resolveBookIssue(id: string) {
     update((d) => { const i = d.bookIssues.find((x) => x.id === id); if (i) i.resolved = true; });
+  },
+
+  /* Accounts (students, parents, staff). Passwords are chosen by the person and stored only as a salted hash. */
+  createAccount(a: Omit<Account, 'id' | 'status' | 'activationCode' | 'createdAt'>): Account {
+    let out: Account | undefined;
+    update((d) => {
+      const existing = d.accounts.find((x) => x.email.toLowerCase() === a.email.toLowerCase());
+      if (existing) {
+        existing.studentIds = [...new Set([...existing.studentIds, ...a.studentIds])];
+        out = existing;
+        return;
+      }
+      out = { ...a, email: a.email.trim().toLowerCase(), id: uid('acct'), status: 'invited', activationCode: activationCode(), createdAt: now() };
+      d.accounts.push(out);
+    });
+    return out!;
+  },
+  activateAccount(id: string, passwordHash: string, salt: string) {
+    update((d) => { const a = d.accounts.find((x) => x.id === id); if (a) { a.passwordHash = passwordHash; a.salt = salt; a.status = 'active'; } });
+  },
+  resetAccess(id: string) {
+    update((d) => { const a = d.accounts.find((x) => x.id === id); if (a) { a.status = 'invited'; a.passwordHash = undefined; a.salt = undefined; a.activationCode = activationCode(); } });
+  },
+  setAccountStatus(id: string, status: Account['status']) {
+    update((d) => { const a = d.accounts.find((x) => x.id === id); if (a) a.status = status; });
+  },
+  importStudents(rows: ImportRow[], by: string) {
+    const created: { studentId: string; studentNo: string; name: string }[] = [];
+    update((d) => {
+      const year = Number(d.school.academicYear.slice(0, 4));
+      for (const r of rows) {
+        let st = r.existingStudentNo ? d.students.find((x) => x.studentNo === r.existingStudentNo) : undefined;
+        if (!st) {
+          const seq = d.students.length + 1;
+          st = {
+            id: uid('st'), studentNo: r.existingStudentNo || `INNO-${r.yearEntered || year}-${String(seq).padStart(3, '0')}`,
+            firstName: r.firstName, lastName: r.lastName, name: `${r.firstName} ${r.lastName}`, gender: r.gender, dob: r.dob,
+            grade: r.grade, section: r.section, yearEntered: r.yearEntered || year, status: 'active',
+            guardianName: r.parentName, guardianRelation: r.relationship || 'Guardian', guardianPhone: r.parentPhone, guardianEmail: r.parentEmail,
+            address: r.address, parentLinked: Boolean(r.parentEmail), previousClasses: [],
+          };
+          d.students.push(st);
+        } else {
+          Object.assign(st, { grade: r.grade, section: r.section, guardianName: r.parentName, guardianPhone: r.parentPhone, guardianEmail: r.parentEmail, parentLinked: Boolean(r.parentEmail) });
+        }
+        if (!d.school.classes.some((c) => c.grade === r.grade && c.sections.includes(r.section))) {
+          const c = d.school.classes.find((x) => x.grade === r.grade);
+          if (c) c.sections = [...c.sections, r.section].sort(); else d.school.classes.push({ grade: r.grade, sections: [r.section] });
+        }
+        created.push({ studentId: st.id, studentNo: st.studentNo, name: st.name });
+        const make = (email: string, name: string, role: Role) => {
+          const e = email.trim().toLowerCase();
+          const ex = d.accounts.find((x) => x.email === e);
+          if (ex) { if (!ex.studentIds.includes(st!.id)) ex.studentIds.push(st!.id); return; }
+          d.accounts.push({ id: uid('acct'), email: e, name, role, studentIds: [st!.id], status: 'invited', activationCode: activationCode(), createdAt: now(), createdBy: by });
+        };
+        if (r.studentEmail) make(r.studentEmail, st.name, 'student');
+        if (r.parentEmail) make(r.parentEmail, r.parentName, 'parent');
+      }
+      notify(d, { title: `${rows.length} students imported`, body: `Fee accounts were created automatically from the fee structure.`, toRoles: ['finance'], link: 'student-accounts' });
+    });
+    return created;
+  },
+  createStaff(input: { name: string; email: string; role: Role; position: string; subjects: string[]; phone: string }, by: string): Account {
+    let out: Account | undefined;
+    update((d) => {
+      const staffId = uid('stf');
+      d.staff.push({ id: staffId, staffNo: `STF-${String(d.staff.length + 1).padStart(3, '0')}`, name: input.name, role: input.role === 'teacher' ? 'teacher' : 'administration', position: input.position, phone: input.phone, email: input.email, subjects: input.subjects, monthlySalary: 0, joined: todayISO() });
+      out = { id: uid('acct'), email: input.email.trim().toLowerCase(), name: input.name, role: input.role, studentIds: [], staffId, status: 'invited', activationCode: activationCode(), createdAt: now(), createdBy: by };
+      d.accounts.push(out);
+      d.platformLog.unshift({ id: uid('pl'), at: now(), actor: by, action: `Created ${input.role.replace('_', ' ')} account`, target: input.email });
+    });
+    return out!;
+  },
+  setTeacherAssignment(grade: number, section: string, subject: string, teacherId: string) {
+    update((d) => {
+      const a = d.assignments.find((x) => x.grade === grade && x.section === section && x.subject === subject);
+      if (a) a.teacherId = teacherId; else d.assignments.push({ grade, section, subject, teacherId });
+      if (!d.gradebooks.some((g) => g.grade === grade && g.section === section && g.subject === subject)) {
+        d.gradebooks.push({ id: `gb-${grade}${section}-${subject.replace(/\s+/g, '')}`, grade, section, subject, teacherId, status: 'draft', fileName: '', fileSize: 0, marks: {}, history: [] });
+      } else {
+        const g = d.gradebooks.find((x) => x.grade === grade && x.section === section && x.subject === subject);
+        if (g && g.status === 'draft') g.teacherId = teacherId;
+      }
+    });
+  },
+
+  /* Library bookings */
+  requestBook(bookId: string, studentId: string, note: string) {
+    update((d) => {
+      d.bookRequests.unshift({ id: uid('br'), bookId, studentId, requestedAt: now(), status: 'pending', note: note || undefined });
+      const b = d.books.find((x) => x.id === bookId);
+      const st = d.students.find((x) => x.id === studentId);
+      notify(d, { title: `New book request — ${b?.title}`, body: `${st?.name} (${st?.studentNo}, ${st ? className(st.grade, st.section) : ''}) requested this book.`, toRoles: ['librarian'], link: 'borrowing:requests' });
+    });
+  },
+  decideBookRequest(id: string, status: 'approved' | 'declined' | 'cancelled', note?: string) {
+    update((d) => {
+      const r = d.bookRequests.find((x) => x.id === id);
+      if (!r) return;
+      r.status = status;
+      if (note) r.note = note;
+      const b = d.books.find((x) => x.id === r.bookId);
+      if (status === 'approved') {
+        const p = new Date(); p.setDate(p.getDate() + 3);
+        r.pickupBy = p.toISOString().slice(0, 10);
+        notify(d, { title: `Book ready for pickup — ${b?.title}`, body: `Collect it from the library by ${fmtDate(r.pickupBy)}. Bring your student ID.`, toStudentIds: [r.studentId], studentOnly: true, link: 'library' });
+      }
+      if (status === 'declined') notify(d, { title: `Book request declined — ${b?.title}`, body: note || 'Please speak to the librarian.', toStudentIds: [r.studentId], studentOnly: true, link: 'library' });
+    });
+  },
+  issueFromRequest(id: string, days: number) {
+    update((d) => {
+      const r = d.bookRequests.find((x) => x.id === id);
+      if (!r) return;
+      r.status = 'collected';
+      const due = new Date(); due.setDate(due.getDate() + days);
+      d.loans.push({ id: uid('ln'), bookId: r.bookId, studentId: r.studentId, borrowedAt: todayISO(), dueAt: due.toISOString().slice(0, 10) });
+    });
+  },
+
+  /* Private message replies (student ↔ counselor) */
+  replyToNotification(id: string, reply: { from: 'student' | 'staff'; name: string; text: string }) {
+    update((d) => {
+      const n = d.notifications.find((x) => x.id === id);
+      if (!n) return;
+      n.replies = [...(n.replies ?? []), { ...reply, at: now() }];
+      if (reply.from === 'student') {
+        notify(d, { title: `Reply from ${reply.name}`, body: `Re: ${n.title} — ${reply.text.slice(0, 120)}`, toRoles: ['counselor'], link: 'student-support-notifications' });
+      } else {
+        n.readBy = [];
+        notify(d, { title: `New reply from the Guidance Counselor`, body: `Re: ${n.title}`, toStudentIds: n.toStudentIds, studentOnly: true, link: `notifications:${n.id}` });
+      }
+    });
+  },
+
+  /* Payments configuration */
+  setWallets(w: MobileMoneyWallet[]) {
+    update((d) => { d.school.mobileMoney = w; });
+  },
+  setBank(bank: SchoolState['school']['bank']) {
+    update((d) => { d.school.bank = bank; });
+  },
+  setSchoolProfile(patch: Partial<Pick<SchoolState['school'], 'name' | 'address' | 'phone' | 'email' | 'motto'>>) {
+    update((d) => { Object.assign(d.school, patch); });
+  },
+  setReportTemplateFile(meta: SchoolState['reportTemplateFile']) {
+    update((d) => { d.reportTemplateFile = meta; });
   },
 
   /* Platform */

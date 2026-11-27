@@ -4,11 +4,11 @@ import {
   Printer, Send, Users,
 } from 'lucide-react';
 import {
-  actions, activeStudents, allSections, attendanceSummary, batchStage, BATCH_LABEL, CATEGORY_LABEL, categoryFor, className,
+  actions, activeStudents, allSections, attendanceSummary, batchStage, BATCH_LABEL, blockTime, CATEGORY_LABEL, categoryFor, className,
   fmtDate, GRADEBOOK_LABEL, gradesOf, letterFor, notificationsFor, roster, schoolDays, schoolPerformance, sectionsOf,
   staffName, studentAverage, studentById, subjectTotals, teachers, useSchool, validateSection,
 } from '@/store/store';
-import { subjectsForGrade, PERIODS, DAYS } from '@/store/seed';
+import { subjectsForGrade } from '@/store/seed';
 import type { GradingConfig, ReportBatch, ReportTemplate } from '@/store/types';
 import { downloadCsv, printHtml, tableHtml } from '@/store/files';
 import {
@@ -17,6 +17,9 @@ import {
 import { ReportCardView } from '@/components/ReportCard';
 import { AttendanceHistory, GradebookDialog, gradebookTone } from './common';
 import { CalendarPage, greeting, useMe, type PageProps } from './shared';
+import { SchoolTemplateUpload } from './schoolTemplate';
+import { reportCardDocx, zipFiles } from '@/store/docxTemplate';
+import { downloadBlob } from '@/store/files';
 
 const stageTone = (s: string) => (s === 'released' ? 'success' : s === 'authorized' ? 'accent' : s === 'submitted' ? 'warning' : s === 'returned' ? 'error' : s === 'in_progress' ? 'navy' : 'muted');
 
@@ -134,6 +137,7 @@ export function ClassesSections() {
   return (
     <div className="space-y-6 animate-fade-in">
       <Header title="Classes and Sections" back={grade != null ? { label: section ? `Grade ${grade}` : 'All classes', onClick: () => (section ? setSection(null) : setGrade(null)) } : undefined} />
+      {grade == null && <AddSection />}
       {grade == null && (
         <Card>
           <Table head={['Class', 'Level', 'Sections', 'Total students', '']}>
@@ -181,23 +185,49 @@ export function ClassesSections() {
   );
 }
 
+function AddSection() {
+  const [g, setG] = useState('7');
+  const [sec, setSec] = useState('');
+  const [ok, setOk] = useState('');
+  return (
+    <Card title="Add a class or section">
+      <div className="flex flex-wrap items-end gap-3">
+        <label><span className="label">Grade</span><select className="input py-2 text-sm" value={g} onChange={(e) => setG(e.target.value)}>{Array.from({ length: 12 }, (_, i) => i + 1).map((n) => <option key={n} value={n}>Grade {n}</option>)}</select></label>
+        <label><span className="label">Section</span><input className="input py-2 text-sm w-24 uppercase" maxLength={1} value={sec} onChange={(e) => setSec(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))} placeholder="A" /></label>
+        <button type="button" className="btn-primary text-sm" disabled={!sec} onClick={() => { actions.addSection(Number(g), sec); setOk(`Grade ${g}${sec} added.`); setSec(''); }}>Add</button>
+        {ok && <span className="text-sm text-success-700">{ok}</span>}
+      </div>
+    </Card>
+  );
+}
+
 export function SectionTimetable({ grade, section, teacherId }: { grade?: number; section?: string; teacherId?: string }) {
   const s = useSchool();
   const slots = s.timetable.filter((t) => (teacherId ? t.teacherId === teacherId : t.grade === grade && t.section === section));
+  const days = s.schedule.days;
+  let lesson = 0;
   return (
     <div className="overflow-x-auto -mx-5 sm:-mx-6">
+      {s.schedule.status === 'draft' && <p className="px-5 sm:px-6 pb-2 text-xs text-warning-700">Draft timetable — changes are being prepared by the Vice Principal.</p>}
       <table className="min-w-full text-xs">
-        <thead><tr className="bg-navy-50"><th className="px-3 py-2 text-left text-navy-600">Time</th>{DAYS.map((d) => <th key={d} className="px-3 py-2 text-left text-navy-600">{d}</th>)}</tr></thead>
+        <thead><tr className="bg-navy-50"><th className="px-3 py-2 text-left text-navy-600">Time</th>{days.map((d) => <th key={d} className="px-3 py-2 text-left text-navy-600">{d}</th>)}</tr></thead>
         <tbody>
-          {PERIODS.map((p) => (
-            <tr key={p.n} className="border-t border-navy-100">
-              <td className="px-3 py-2 whitespace-nowrap text-navy-500">{p.time}</td>
-              {DAYS.map((d) => {
-                const here = slots.filter((x) => x.day === d && x.period === p.n);
-                return <td key={d} className="px-3 py-2 align-top">{here.map((x, i) => <div key={i} className={x.subject === 'Study Hall' ? 'text-navy-400' : ''}><span className="font-medium text-navy-800">{x.subject}</span>{teacherId ? <span className="text-navy-500"> – {x.grade}{x.section}</span> : <span className="block text-navy-500">{x.teacherId ? staffName(s, x.teacherId) : 'No teacher'}</span>}<span className="block text-navy-400">{x.room}</span></div>)}{!here.length && <span className="text-navy-300">—</span>}</td>;
-              })}
-            </tr>
-          ))}
+          {s.schedule.blocks.map((b) => {
+            if (b.kind !== 'lesson') {
+              return <tr key={b.id} className="border-t border-navy-100 bg-navy-50/60"><td className="px-3 py-1.5 whitespace-nowrap text-navy-500">{blockTime(b)}</td><td colSpan={days.length} className="px-3 py-1.5 text-center font-medium text-navy-600 uppercase tracking-wide text-[11px]">{b.label}</td></tr>;
+            }
+            lesson += 1;
+            const n = lesson;
+            return (
+              <tr key={b.id} className="border-t border-navy-100">
+                <td className="px-3 py-2 whitespace-nowrap text-navy-500">{blockTime(b)}<span className="block text-[10px] text-navy-400">{b.label}</span></td>
+                {days.map((d) => {
+                  const here = slots.filter((x) => x.day === d && x.period === n);
+                  return <td key={d} className="px-3 py-2 align-top">{here.map((x, i) => <div key={i} className={x.subject === 'Study Hall' ? 'text-navy-400' : ''}><span className="font-medium text-navy-800">{x.subject}</span>{teacherId ? <span className="text-navy-500"> – {x.grade}{x.section}</span> : <span className="block text-navy-500">{x.teacherId ? staffName(s, x.teacherId) : 'No teacher'}</span>}<span className="block text-navy-400">{x.room}</span></div>)}{!here.length && <span className="text-navy-300">—</span>}</td>;
+                })}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -242,6 +272,7 @@ export function TeacherAssignments() {
       <Header title="Teacher Academic Assignments" subtitle={`${s.school.academicYear}${s.school.currentPeriod ? ` · ${s.school.currentPeriod}` : ''}`} />
       {missing.length > 0 && <Notice tone="warning"><b>Missing assignments:</b> {missing.map((m) => `${className(m.grade, m.section)} ${m.subject}`).join(', ')}. Coordinate with the Vice Principal to assign a teacher.</Notice>}
       {conflicts.length > 0 ? <Notice tone="error">{conflicts.length} timetable conflict(s) detected.</Notice> : <Notice tone="success">No teacher timetable conflicts detected.</Notice>}
+      <AssignTeacher />
       <div className="max-w-sm"><SearchBox value={q} onChange={setQ} placeholder="Filter by teacher, subject or class" /></div>
       <Card>
         <Table head={['Teacher', 'Staff ID', 'Class', 'Section', 'Subject', 'Academic year']}>
@@ -249,6 +280,26 @@ export function TeacherAssignments() {
         </Table>
       </Card>
     </div>
+  );
+}
+
+function AssignTeacher() {
+  const s = useSchool();
+  const [grade, setGrade] = useState<number | null>(null);
+  const [section, setSection] = useState<string | null>(null);
+  const [subject, setSubject] = useState('');
+  const [teacher, setTeacher] = useState('');
+  const [ok, setOk] = useState('');
+  return (
+    <Card title="Assign a teacher to a class subject" subtitle="Assignments control what each teacher sees and which gradebooks they submit.">
+      <div className="flex flex-wrap items-end gap-3">
+        <ClassSectionPicker grade={grade} section={section} onChange={(g, x) => { setGrade(g); setSection(x); }} />
+        <label><span className="label">Subject</span><input className="input py-2 text-sm" list="subjects-list" value={subject} onChange={(e) => setSubject(e.target.value)} /><datalist id="subjects-list">{(grade ? subjectsForGrade(grade) : []).map((x) => <option key={x} value={x} />)}</datalist></label>
+        <label><span className="label">Teacher</span><select className="input py-2 text-sm" value={teacher} onChange={(e) => setTeacher(e.target.value)}><option value="">Select</option>{teachers(s).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
+        <button type="button" className="btn-primary text-sm" disabled={grade == null || !section || !subject || !teacher} onClick={() => { actions.setTeacherAssignment(grade!, section!, subject, teacher); setOk(`${staffName(s, teacher)} assigned to Grade ${grade}${section} ${subject}.`); }}>Assign</button>
+      </div>
+      {ok && <p className="text-sm text-success-700 mt-2">{ok}</p>}
+    </Card>
   );
 }
 
@@ -528,7 +579,7 @@ export function ReportCardManagement({ param, onNavigate }: PageProps) {
             <Stat label="Awaiting review" value={counts.draft} tone="warning" />
             <Stat label="Requires correction" value={counts.errors} tone="error" />
           </div>
-          <Card title="Individual gradesheets" action={canEdit && counts.draft > 0 ? <button type="button" className="btn-secondary text-sm" onClick={() => actions.reviewAll(batch.key)}>Mark all drafts as reviewed</button> : undefined}>
+          <Card title="Individual gradesheets" action={<div className="flex flex-wrap gap-2">{s.reportTemplateFile?.active && <button type="button" className="btn-secondary text-sm" onClick={async () => { const files = (await Promise.all(kids.map(async (k) => ({ name: `${k.studentNo}_${k.name.replace(/\W+/g, '_')}.docx`, blob: await reportCardDocx(s, k.id) })))).filter((f): f is { name: string; blob: Blob } => !!f.blob); downloadBlob(await zipFiles(files), `Report_cards_${batch.grade}${batch.section}.zip`); }}><Download className="w-4 h-4" /> All report cards (.zip, school template)</button>}{canEdit && counts.draft > 0 && <button type="button" className="btn-secondary text-sm" onClick={() => actions.reviewAll(batch.key)}>Mark all drafts as reviewed</button>}</div>}>
             <Table head={['Student ID', 'Student', 'Subjects', 'Overall average', 'Gradesheet status', batch.status === 'released' ? 'Access' : '', '']}>
               {kids.map((k) => {
                 const sh = batch.sheets[k.id];
@@ -607,6 +658,9 @@ function TemplateDesigner() {
   ];
   const preview = useMemo(() => ({ ...s, template: t }), [s, t]);
   return (
+    <div className="space-y-6">
+    <SchoolTemplateUpload />
+    {s.reportTemplateFile?.active && <Notice>The school's Word template is in use, so report cards download in that design. The built-in layout below is still used for on-screen previews.</Notice>}
     <div className="grid xl:grid-cols-[340px_1fr] gap-6">
       <Card title="Template settings" subtitle="Reused for every class. Live preview on the right.">
         <div className="space-y-3">
@@ -618,7 +672,8 @@ function TemplateDesigner() {
           <button type="button" className="btn-primary w-full" onClick={() => { actions.saveTemplate(t); setSaved(true); }}>{saved ? 'Template saved' : 'Save template'}</button>
         </div>
       </Card>
-      <Card title="Live preview (sample student)"><ReportCardView school={preview} studentId="s1" /></Card>
+      <Card title="Built-in layout — live preview">{s.students[0] ? <ReportCardView school={preview} studentId={s.students.find((x) => x.status === 'active')?.id ?? s.students[0].id} /> : <p className="text-sm text-navy-500">Register students to see a preview.</p>}</Card>
+    </div>
     </div>
   );
 }

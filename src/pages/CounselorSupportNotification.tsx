@@ -682,19 +682,40 @@ export function CounselorSupportNotifications() {
           <ul className="divide-y divide-navy-100">
             {privateSent.map((n) => {
               const st = studentById(school, n.toStudentIds?.[0] ?? '');
+              const replies = n.replies ?? [];
               return (
-                <li key={n.id} className="py-3 flex flex-wrap items-start justify-between gap-2">
-                  <span>
-                    <span className="block text-sm font-medium text-navy-900">{n.title}</span>
-                    <span className="block text-xs text-navy-500">To {st?.name ?? 'student'} only · {fmtSchoolDate(n.createdAt)}</span>
-                  </span>
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${n.readBy.length ? 'bg-success-100 text-success-700' : 'bg-navy-100 text-navy-700'}`}>{n.readBy.length ? 'Read by student' : 'Delivered'}</span>
+                <li key={n.id} className="py-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <span>
+                      <span className="block text-sm font-medium text-navy-900">{n.title}</span>
+                      <span className="block text-xs text-navy-500">To {st?.name ?? 'student'} only · {fmtSchoolDate(n.createdAt)}</span>
+                    </span>
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${replies.some((r) => r.from === 'student') ? 'bg-accent-100 text-accent-800' : n.readBy.length ? 'bg-success-100 text-success-700' : 'bg-navy-100 text-navy-700'}`}>{replies.some((r) => r.from === 'student') ? `${replies.filter((r) => r.from === 'student').length} reply from student` : n.readBy.length ? 'Read by student' : 'Delivered'}</span>
+                  </div>
+                  {replies.length > 0 && (
+                    <div className="mt-2 space-y-2">
+                      {replies.map((r, i) => <div key={i} className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${r.from === 'student' ? 'bg-navy-50' : 'ml-auto bg-navy-700 text-white'}`}>{r.text}<p className="text-[10px] opacity-70 mt-1">{r.from === 'student' ? st?.name : 'You'} · {fmtSchoolDate(r.at)}</p></div>)}
+                    </div>
+                  )}
+                  <CounselorReply notificationId={n.id} />
                 </li>
               );
             })}
           </ul>
         )}
       </SectionCard>
+    </div>
+  );
+}
+
+
+function CounselorReply({ notificationId }: { notificationId: string }) {
+  const { user } = useAuth();
+  const [text, setText] = useState('');
+  return (
+    <div className="flex gap-2 mt-2">
+      <input className="input py-1.5 text-sm" value={text} onChange={(e) => setText(e.target.value)} placeholder="Reply privately to this student…" aria-label="Reply to student" />
+      <button className="btn-secondary text-sm" disabled={!text.trim()} onClick={() => { schoolActions.replyToNotification(notificationId, { from: 'staff', name: user?.name ?? 'Guidance Counselor', text: text.trim() }); setText(''); }}>Reply</button>
     </div>
   );
 }

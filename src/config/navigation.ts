@@ -25,7 +25,7 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
     n('Student Attendance', 'CalendarCheck', 'student-attendance'),
     n('Class Monitoring', 'Gauge', 'class-monitoring'),
     n('Teacher Timetables', 'CalendarClock', 'teacher-timetables'),
-    n('Class Schedules', 'CalendarRange', 'class-schedules'),
+    n('Class Schedules (Timetable Builder)', 'CalendarRange', 'class-schedules'),
     n('Daily Activities', 'Activity', 'daily-activities'),
     n('Substitute Teacher Management', 'Repeat2', 'substitutes'),
     n('Student Movement and Supervision', 'Navigation', 'student-movement'),

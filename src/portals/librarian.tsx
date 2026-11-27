@@ -1,12 +1,30 @@
 import { useState } from 'react';
-import { BookCopy, BookMarked, BookX, CheckCircle2, Clock, Download, IdCard, Tags } from 'lucide-react';
+import { BookCopy, BookMarked, BookX, CheckCircle2, Clock, Download, IdCard, ImagePlus, Inbox, Tags } from 'lucide-react';
 import { actions, activeStudents, className, fmtDate, studentById, useSchool } from '@/store/store';
 import type { Book, SchoolState } from '@/store/types';
 import { downloadCsv } from '@/store/files';
-import { Card, Dialog, Field, Header, Notice, Pill, SearchBox, Stat, Table } from '@/components/kit';
+import { Card, Dialog, Field, Header, Notice, Pill, SearchBox, Stat, Table, Tabs } from '@/components/kit';
+import { BookCover, resizeImage } from '@/components/BookCover';
 import { ContactLinks, greeting, useMe, type PageProps } from './shared';
 
 const today = () => new Date().toISOString().slice(0, 10);
+
+function CoverPicker({ value, onChange }: { value?: string; onChange: (v: string | undefined) => void }) {
+  const [err, setErr] = useState('');
+  return (
+    <div>
+      <span className="label">Cover photo</span>
+      <div className="flex items-center gap-3">
+        {value ? <img src={value} alt="Cover" className="w-16 h-20 object-cover rounded" /> : <div className="w-16 h-20 rounded bg-navy-50 flex items-center justify-center text-navy-300"><ImagePlus className="w-6 h-6" /></div>}
+        <div className="space-y-1">
+          <label className="btn-secondary text-xs py-1.5 cursor-pointer">Upload photo<input type="file" accept="image/*" className="sr-only" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; try { setErr(''); onChange(await resizeImage(f)); } catch { setErr('Choose an image file (JPG or PNG).'); } }} /></label>
+          {value && <button type="button" className="block text-xs text-error-600" onClick={() => onChange(undefined)}>Remove</button>}
+          {err && <p className="text-xs text-error-600">{err}</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
 const onLoan = (s: SchoolState, bookId: string) => s.loans.filter((l) => l.bookId === bookId && !l.returnedAt).length;
 const available = (s: SchoolState, b: Book) => Math.max(0, b.copies - onLoan(s, b.id) - s.bookIssues.filter((i) => i.bookId === b.id && !i.resolved && i.kind === 'missing').length);
 const overdueLoans = (s: SchoolState) => s.loans.filter((l) => !l.returnedAt && l.dueAt < today());
@@ -37,6 +55,7 @@ export function LibraryOverview({ onNavigate }: PageProps) {
     <div className="space-y-6 animate-fade-in">
       <Header title={greeting(me.name)} subtitle={`${s.school.name} Library`} action={<button type="button" className="btn-primary" onClick={() => onNavigate('borrowing')}><BookMarked className="w-4 h-4" /> Issue a book</button>} />
       <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        <Stat label="Booking requests" value={s.bookRequests.filter((r) => r.status === 'pending').length} sub="From students, awaiting your decision" icon={<Inbox className="w-5 h-5" />} tone="warning" onClick={() => onNavigate('borrowing:requests')} />
         <Stat label="Titles / copies" value={`${s.books.length} / ${copies}`} icon={<BookCopy className="w-5 h-5" />} onClick={() => onNavigate('inventory')} />
         <Stat label="Books on loan" value={out.length} icon={<BookMarked className="w-5 h-5" />} tone="accent" onClick={() => onNavigate('returns')} />
         <Stat label="Overdue books" value={overdueLoans(s).length} icon={<Clock className="w-5 h-5" />} tone="error" onClick={() => onNavigate('overdue')} />
@@ -60,12 +79,12 @@ export function BookInventory() {
     <div className="space-y-6 animate-fade-in">
       <Header title="Book Inventory" subtitle={`${s.books.length} titles · availability updates automatically on borrow and return.`} />
       <Card action={<div className="w-72"><SearchBox value={q} onChange={setQ} placeholder="Title, author, book ID, subject" /></div>}>
-        <Table head={['Book ID', 'Title', 'Author', 'Subject', 'Shelf', 'Copies', 'Available', '']}>
-          {list.map((b) => { const av = available(s, b); return <tr key={b.id}><td className="font-mono text-xs">{b.bookNo}</td><td className="font-medium">{b.title}</td><td className="text-sm">{b.author}</td><td>{b.category}</td><td className="text-xs">{b.shelf}</td><td>{b.copies}</td><td><Pill tone={av === 0 ? 'error' : av < 2 ? 'warning' : 'success'}>{av}</Pill></td><td><button type="button" className="text-sm text-navy-700 hover:underline" onClick={() => setEdit({ ...b })}>Edit</button></td></tr>; })}
+        <Table head={['', 'Book ID', 'Title', 'Author', 'Subject', 'Shelf', 'Copies', 'Available', '']}>
+          {list.map((b) => { const av = available(s, b); return <tr key={b.id}><td><BookCover book={b} className="w-10 h-12" /></td><td className="font-mono text-xs">{b.bookNo}</td><td className="font-medium">{b.title}</td><td className="text-sm">{b.author}</td><td>{b.category}</td><td className="text-xs">{b.shelf}</td><td>{b.copies}</td><td><Pill tone={av === 0 ? 'error' : av < 2 ? 'warning' : 'success'}>{av}</Pill></td><td><button type="button" className="text-sm text-navy-700 hover:underline" onClick={() => setEdit({ ...b })}>Edit</button></td></tr>; })}
         </Table>
       </Card>
       <Dialog open={!!edit} onClose={() => setEdit(null)} title={`Update ${edit?.bookNo}`} footer={<><button type="button" className="btn-secondary" onClick={() => setEdit(null)}>Cancel</button><button type="button" className="btn-primary" onClick={() => { if (edit) actions.updateBook(edit.id, edit); setEdit(null); }}>Save</button></>}>
-        {edit && <div className="grid sm:grid-cols-2 gap-3"><Field label="Title"><input className="input" value={edit.title} onChange={(e) => setEdit({ ...edit, title: e.target.value })} /></Field><Field label="Author"><input className="input" value={edit.author} onChange={(e) => setEdit({ ...edit, author: e.target.value })} /></Field><Field label="Subject"><input className="input" value={edit.category} onChange={(e) => setEdit({ ...edit, category: e.target.value })} /></Field><Field label="Shelf"><input className="input" value={edit.shelf} onChange={(e) => setEdit({ ...edit, shelf: e.target.value })} /></Field><Field label="Copies"><input type="number" min="0" className="input" value={edit.copies} onChange={(e) => setEdit({ ...edit, copies: Number(e.target.value) })} /></Field><Field label="ISBN"><input className="input" value={edit.isbn} onChange={(e) => setEdit({ ...edit, isbn: e.target.value })} /></Field></div>}
+        {edit && <div className="grid sm:grid-cols-2 gap-3"><Field label="Title"><input className="input" value={edit.title} onChange={(e) => setEdit({ ...edit, title: e.target.value })} /></Field><Field label="Author"><input className="input" value={edit.author} onChange={(e) => setEdit({ ...edit, author: e.target.value })} /></Field><Field label="Subject"><input className="input" value={edit.category} onChange={(e) => setEdit({ ...edit, category: e.target.value })} /></Field><Field label="Shelf"><input className="input" value={edit.shelf} onChange={(e) => setEdit({ ...edit, shelf: e.target.value })} /></Field><Field label="Copies"><input type="number" min="0" className="input" value={edit.copies} onChange={(e) => setEdit({ ...edit, copies: Number(e.target.value) })} /></Field><Field label="ISBN"><input className="input" value={edit.isbn} onChange={(e) => setEdit({ ...edit, isbn: e.target.value })} /></Field><div className="sm:col-span-2"><Field label="Description (shown to students)"><textarea className="input" value={edit.description ?? ''} onChange={(e) => setEdit({ ...edit, description: e.target.value })} /></Field></div><CoverPicker value={edit.cover} onChange={(v) => setEdit({ ...edit, cover: v })} /></div>}
       </Dialog>
     </div>
   );
@@ -74,7 +93,7 @@ export function BookInventory() {
 export function AddBook({ onNavigate }: PageProps) {
   const s = useSchool();
   const cats = [...new Set(s.books.map((b) => b.category))];
-  const [f, setF] = useState({ title: '', author: '', category: cats[0] ?? 'Mathematics', isbn: '', copies: 1, shelf: '', year: new Date().getFullYear() });
+  const [f, setF] = useState<{ title: string; author: string; category: string; isbn: string; copies: number; shelf: string; year: number; description: string; cover?: string }>({ title: '', author: '', category: cats[0] ?? 'Mathematics', isbn: '', copies: 1, shelf: '', year: new Date().getFullYear(), description: '' });
   const [done, setDone] = useState('');
   return (
     <div className="space-y-6 animate-fade-in">
@@ -88,8 +107,10 @@ export function AddBook({ onNavigate }: PageProps) {
           <Field label="ISBN"><input className="input" value={f.isbn} onChange={(e) => setF({ ...f, isbn: e.target.value })} /></Field>
           <Field label="Number of copies"><input type="number" min="1" className="input" value={f.copies} onChange={(e) => setF({ ...f, copies: Number(e.target.value) })} /></Field>
           <Field label="Shelf location"><input className="input" value={f.shelf} onChange={(e) => setF({ ...f, shelf: e.target.value })} placeholder="e.g. MAT-2" /></Field>
+          <div className="md:col-span-2"><Field label="Description (shown to students)"><textarea className="input" value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></Field></div>
+          <CoverPicker value={f.cover} onChange={(v) => setF({ ...f, cover: v })} />
         </div>
-        <div className="flex justify-end mt-4"><button type="button" className="btn-primary" disabled={!f.title || !f.author || f.copies < 1} onClick={() => { actions.addBook(f); setDone(`"${f.title}" registered as LIB-${String(s.books.length + 1).padStart(4, '0')}.`); setF({ ...f, title: '', author: '', isbn: '', shelf: '', copies: 1 }); }}>Register book</button></div>
+        <div className="flex justify-end mt-4"><button type="button" className="btn-primary" disabled={!f.title || !f.author || f.copies < 1} onClick={() => { actions.addBook(f); setDone(`"${f.title}" registered as LIB-${String(s.books.length + 1).padStart(4, '0')}.`); setF({ ...f, title: '', author: '', isbn: '', shelf: '', copies: 1, description: '', cover: undefined }); }}>Register book</button></div>
       </Card>
     </div>
   );
@@ -110,7 +131,54 @@ export function BookCategories() {
   );
 }
 
-export function StudentBorrowing() {
+export function StudentBorrowing({ param }: PageProps) {
+  const s = useSchool();
+  const [tab, setTab] = useState<'requests' | 'issue'>(param === 'requests' || s.bookRequests.some((r) => r.status === 'pending') ? 'requests' : 'issue');
+  const pending = s.bookRequests.filter((r) => r.status === 'pending' || r.status === 'approved');
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <Header title="Student Borrowing" subtitle="Handle booking requests from students, or issue a book directly at the desk." />
+      <Tabs tabs={[{ id: 'requests', label: 'Booking requests', count: s.bookRequests.filter((r) => r.status === 'pending').length }, { id: 'issue', label: 'Issue a book' }]} value={tab} onChange={setTab} />
+      {tab === 'requests' ? <BookingRequests list={pending} /> : <IssueBook />}
+    </div>
+  );
+}
+
+function BookingRequests({ list }: { list: SchoolState['bookRequests'] }) {
+  const s = useSchool();
+  const [decline, setDecline] = useState<string | null>(null);
+  const [reason, setReason] = useState('');
+  const [days, setDays] = useState(14);
+  const history = s.bookRequests.filter((r) => !list.includes(r)).slice(0, 10);
+  return (
+    <div className="space-y-6">
+      <Card title="Open requests" action={<Field label="Loan period when issuing"><select className="input py-1.5 text-sm" value={days} onChange={(e) => setDays(Number(e.target.value))}><option value={7}>7 days</option><option value={14}>14 days</option><option value={21}>21 days</option></select></Field>}>
+        <Table head={['Book', 'Student', 'Requested', 'Available', 'Status', 'Actions']} empty="No open requests.">
+          {list.map((r) => { const b = s.books.find((x) => x.id === r.bookId)!; const st = studentById(s, r.studentId); const av = available(s, b); return (
+            <tr key={r.id}>
+              <td><div className="flex items-center gap-2"><BookCover book={b} className="w-9 h-12" /><span className="font-medium">{b.title}</span></div></td>
+              <td>{st?.name}<p className="text-xs text-navy-500 font-mono">{st?.studentNo} · {st && className(st.grade, st.section)}</p>{r.note && <p className="text-xs text-navy-600 italic">“{r.note}”</p>}</td>
+              <td className="text-xs">{fmtDate(r.requestedAt)}</td>
+              <td><Pill tone={av ? 'success' : 'error'}>{av}</Pill></td>
+              <td>{r.status === 'approved' ? <Pill tone="success">Ready · collect by {fmtDate(r.pickupBy)}</Pill> : <Pill tone="warning">New</Pill>}</td>
+              <td className="whitespace-nowrap">
+                {r.status === 'pending' && <button type="button" className="btn-primary text-xs py-1.5 mr-2" disabled={!av} title={av ? undefined : 'No copy available'} onClick={() => actions.decideBookRequest(r.id, 'approved')}>Approve</button>}
+                {r.status === 'approved' && <button type="button" className="btn-primary text-xs py-1.5 mr-2" disabled={!av} onClick={() => actions.issueFromRequest(r.id, days)}>Issue (collected)</button>}
+                <button type="button" className="btn-ghost text-xs py-1.5 text-error-600" onClick={() => { setDecline(r.id); setReason(''); }}>Decline</button>
+              </td>
+            </tr>
+          ); })}
+        </Table>
+      </Card>
+      <Card title="Recent decisions"><Table head={['Book', 'Student', 'Requested', 'Outcome']}>{history.map((r) => <tr key={r.id}><td>{s.books.find((b) => b.id === r.bookId)?.title}</td><td>{studentById(s, r.studentId)?.name}</td><td className="text-xs">{fmtDate(r.requestedAt)}</td><td><Pill tone={r.status === 'collected' ? 'success' : 'muted'}>{r.status}</Pill></td></tr>)}</Table></Card>
+      <Dialog open={!!decline} onClose={() => setDecline(null)} title="Decline request" footer={<><button type="button" className="btn-secondary" onClick={() => setDecline(null)}>Cancel</button><button type="button" className="btn-danger" onClick={() => { if (decline) actions.decideBookRequest(decline, 'declined', reason || undefined); setDecline(null); }}>Decline</button></>}>
+        <Field label="Reason (sent to the student)"><input className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Reference copy — read it in the library" /></Field>
+      </Dialog>
+    </div>
+  );
+}
+
+function IssueBook() {
   const s = useSchool();
   const [student, setStudent] = useState('');
   const [q, setQ] = useState('');
@@ -120,8 +188,7 @@ export function StudentBorrowing() {
   const books = s.books.filter((b) => available(s, b) > 0 && `${b.title} ${b.bookNo}`.toLowerCase().includes(q.toLowerCase())).slice(0, 8);
   const overdue = overdueLoans(s).filter((l) => l.studentId === student);
   return (
-    <div className="space-y-6 animate-fade-in">
-      <Header title="Student Borrowing" subtitle="Search the student by ID. The loan is recorded on the student's profile." />
+    <div className="space-y-6">
       {done && <Notice tone="success">{done}</Notice>}
       <div className="grid lg:grid-cols-2 gap-6">
         <Card title="1. Student"><StudentLookup value={student} onPick={(id) => { setStudent(id); setDone(''); }} />{overdue.length > 0 && <div className="mt-3"><Notice tone="warning">This student has {overdue.length} overdue book(s). Collect them before issuing more.</Notice></div>}</Card>

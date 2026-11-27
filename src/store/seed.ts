@@ -1,4 +1,5 @@
 import type {
+  DayBlock,
   Application, Assignment, Book, BookIssue, CalendarEvent, Concession, CounselingSummary, Exam, Expense,
   Gradebook, GradingConfig, Incident, Leadership, Loan, MarkRow, Payment, ReportBatch, SchoolState,
   SchoolStudent, StaffAttendance, StaffMember, TimetableSlot,
@@ -16,7 +17,7 @@ function rng(seed: number) {
   };
 }
 
-export const SEED_VERSION = 4;
+export const SEED_VERSION = 5;
 export const todayISO = () => new Date().toISOString().slice(0, 10);
 const daysAgo = (n: number) => {
   const d = new Date();
@@ -53,6 +54,20 @@ export const PERIODS = [
   { n: 7, time: '1:45–2:30' },
 ];
 export const DAYS: TimetableSlot['day'][] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+
+export const DEFAULT_BLOCKS: DayBlock[] = [
+  { id: 'b0', kind: 'assembly', label: 'Morning assembly', start: '07:45', end: '08:00' },
+  { id: 'b1', kind: 'lesson', label: 'Period 1', start: '08:00', end: '08:45' },
+  { id: 'b2', kind: 'lesson', label: 'Period 2', start: '08:45', end: '09:30' },
+  { id: 'b3', kind: 'lesson', label: 'Period 3', start: '09:30', end: '10:15' },
+  { id: 'b4', kind: 'break', label: 'Short break', start: '10:15', end: '10:45' },
+  { id: 'b5', kind: 'lesson', label: 'Period 4', start: '10:45', end: '11:30' },
+  { id: 'b6', kind: 'lesson', label: 'Period 5', start: '11:30', end: '12:15' },
+  { id: 'b7', kind: 'lunch', label: 'Lunch', start: '12:15', end: '13:00' },
+  { id: 'b8', kind: 'lesson', label: 'Period 6', start: '13:00', end: '13:45' },
+  { id: 'b9', kind: 'lesson', label: 'Period 7', start: '13:45', end: '14:30' },
+  { id: 'b10', kind: 'dismissal', label: 'Dismissal', start: '14:30', end: '14:40' },
+];
 export const roomFor = (grade: number, section: string) => `Room ${grade}${section === 'A' ? '01' : section === 'B' ? '02' : '03'}`;
 
 const FIRST_M = ['Emmanuel', 'Joseph', 'Augustine', 'Daniel', 'Samuel', 'Moses', 'Prince', 'Solomon', 'Abraham', 'Varney', 'Momo', 'Alvin', 'Jerome', 'Isaac', 'Benedict', 'Francis', 'Christopher', 'Amos', 'Henry', 'Kollie', 'Boakai', 'Musa', 'Fayia', 'Togba', 'Jallah', 'Harris', 'Lawrence', 'Gabriel'];
@@ -589,7 +604,21 @@ export function buildSeed(): SchoolState {
       academicYear: '2026/2027', currentPeriod: null,
       bank: { bank: 'Ecobank Liberia Ltd.', accountName: 'Innosys Academy — School Fees', accountNo: '0011-2045-7783-01', branch: 'Broad Street Branch, Monrovia', swift: 'ECOCLRLM' },
       parentTeacherMessaging: true,
+      mobileMoney: [
+        { provider: 'MTN Mobile Money', merchantName: 'Innosys Academy', number: '0886 000 111', dialCode: '' },
+        { provider: 'Orange Money', merchantName: 'Innosys Academy', number: '0776 000 222', dialCode: '' },
+      ],
+      paymentProvider: { name: 'Not connected', connected: false },
+      classes: GRADE_SECTIONS.map((g) => ({ grade: g.grade, sections: [...g.sections] })),
     },
+    mode: 'demo',
+    schedule: { days: [...DAYS], blocks: DEFAULT_BLOCKS, status: 'published', publishedAt: '2026-09-01', effectiveFrom: '2026-09-07' },
+    accounts: [],
+    bookRequests: [
+      { id: 'br1', bookId: 'bk-7', studentId: by('10A', 2), requestedAt: daysAgo(1), status: 'pending', note: 'Need it for the chemistry test next week.' },
+      { id: 'br2', bookId: 'bk-12', studentId: by('9A', 5), requestedAt: daysAgo(0), status: 'pending' },
+      { id: 'br3', bookId: 'bk-3', studentId: by('12A', 1), requestedAt: daysAgo(3), status: 'approved', pickupBy: daysAhead(1) },
+    ],
     students, staff, assignments, timetable, gradebooks, batches,
     grading: DEFAULT_GRADING,
     gradingHistory: [{ ...DEFAULT_GRADING, version: 1, effectiveFrom: '2025-09-01', components: DEFAULT_GRADING.components.map((c) => (c.key === 'midterm' ? { ...c, weight: 30 } : c.key === 'final' ? { ...c, weight: 50 } : c)) }],
@@ -702,5 +731,34 @@ export function buildSeed(): SchoolState {
       { id: 'bk3', at: daysAgo(2), sizeGb: 33.9, kind: 'scheduled', status: 'completed' },
       { id: 'bk4', at: daysAgo(5), sizeGb: 33.5, kind: 'manual', status: 'completed' },
     ],
+  };
+}
+
+/** Empty school used when a real school starts fresh (VITE_START_FRESH=true). Same codebase, no demo records. */
+export function buildFreshSchool(name = 'Your School'): SchoolState {
+  const demo = buildSeed();
+  const year = new Date().getMonth() >= 6 ? new Date().getFullYear() : new Date().getFullYear() - 1;
+  const ay = `${year}/${year + 1}`;
+  return {
+    ...demo,
+    mode: 'live',
+    school: {
+      ...demo.school,
+      name, address: '', phone: '', email: '', motto: '', academicYear: ay, currentPeriod: null,
+      bank: { bank: '', accountName: '', accountNo: '', branch: '', swift: '' },
+      mobileMoney: [],
+      classes: [7, 8, 9, 10, 11, 12].map((grade) => ({ grade, sections: ['A'] })),
+    },
+    students: [], staff: [], assignments: [], timetable: [], gradebooks: [], batches: [],
+    gradingHistory: [],
+    template: { ...demo.template, schoolAddress: '', motto: '' },
+    years: [{ id: `ay-${year}`, name: ay, start: `${year}-09-01`, end: `${year + 1}-07-15`, status: 'current', periods: [] }],
+    calendar: [], exams: [], staffAttendance: [], substitutions: [], incidents: [], counseling: [],
+    feeStructures: demo.feeStructures.map((f) => ({ ...f, items: f.items.map((i) => ({ ...i, amount: 0 })) })),
+    payments: [], concessions: [], expenses: [], budget: [], salaryRuns: [], books: [], loans: [], bookIssues: [],
+    announcements: [], notifications: [], threads: [], staffReports: [], opsLog: [], applications: [], leadership: [],
+    complaints: [], followUps: [], tenants: [], tickets: [], platformLog: [], backups: [],
+    schedule: { days: [...DAYS], blocks: DEFAULT_BLOCKS, status: 'draft' },
+    accounts: [], bookRequests: [], reportTemplateFile: undefined,
   };
 }

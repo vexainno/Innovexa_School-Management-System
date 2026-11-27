@@ -21,6 +21,27 @@ npm run preview    # serve the production build
 `dist/` is a static site and can be hosted anywhere (Vercel, Netlify, Cloudflare Pages, S3). Routing uses
 `#/page` URLs, so no server rewrite rules are needed.
 
+## Demo build vs. a real school
+
+The same codebase runs in two modes, chosen at build time (see `.env.example`):
+
+| | Demo (default) | Real school |
+|---|---|---|
+| Setting | `VITE_START_FRESH=false` | `VITE_START_FRESH=true` and `VITE_SCHOOL_NAME="…"` |
+| Data | Sample school (Innosys Academy) | Starts empty |
+| Sign-in | Demonstration accounts | Demo accounts disabled |
+
+```bash
+VITE_START_FRESH=true VITE_SCHOOL_NAME="St. Mary's High School" npm run build
+```
+
+**Setting up a real school**
+1. On the first visit, create the Innovexa platform administrator (shown only once).
+2. Super Admin → Platform Users → *School staff accounts*: create each staff member (Principal, VP, Registrar, Teachers, …). Each gets a 6-digit activation code.
+3. Staff open the portal, choose *First time here? Activate your account*, enter their email and code, and **create their own password**.
+4. Registrar → Student Registration → *Bulk import from Excel*: download the template, fill one row per student (student email, parent name, parent email, phone…), upload, check, import. Student IDs, fee accounts and student/parent logins are created; parents with several children get one account. Print the activation slips and give them out.
+5. Students and parents activate the same way and choose their own passwords. Passwords are stored only as salted PBKDF2 hashes and are never visible to the school.
+
 ## Demonstration accounts
 
 The demonstration accounts are **not listed on the login screen**. They work in every build (development and
@@ -64,6 +85,14 @@ so they always agree across workspaces.
 - VP marks a teacher absent → arranges substitutes for that teacher's lessons → substitute and students notified → Class Monitoring updates.
 - Librarian looks up students by ID; borrowing and returns update availability automatically.
 
+## More features
+
+- **Weekly class schedule (VP):** define the school day (assembly, lesson periods, breaks, lunch, activities, dismissal, with times and school days), build each class's timetable with teacher/room conflict checks, copy days, then publish. Every timetable in the platform follows it.
+- **School's own report card (Academic Officer):** upload a Word (.docx) design containing placeholders such as `{student_name}` and `{#subjects}…{/subjects}`; every report card is then produced in that design (single download or a .zip per class). A starter template is provided.
+- **Library booking:** students browse covers and details and book a copy; requests go to the Librarian to approve, then issue.
+- **Private counselor messages:** students open, read and reply; the counselor sees replies and answers. Parents and other staff cannot see them.
+- **Parent payments:** card form (Luhn/expiry validation, bank one-time code step) and MTN / Orange mobile money (payment request to the parent's phone, plus a one-tap link to the phone's mobile money menu when the school sets its dial code). Finance sets the school's bank and merchant wallets under *School Fee Structure → How parents pay*.
+
 ## Code map
 
 ```
@@ -90,5 +119,10 @@ payment-provider checkout (no card details in the app), and a real notification 
 
 - Data is stored in the browser (`localStorage`); it is per device and per browser.
 - Uploaded gradebook files are kept for the current browser session only.
-- Online card/mobile-money checkout is a clearly labelled demonstration; no money moves.
+- Online card and mobile money payments run in demonstration mode until a payment provider is connected
+  (`src/services/paymentGateway.ts`). Real settlement to the school needs a merchant account (e.g. Flutterwave,
+  MTN MoMo or Orange Money merchant APIs) and a small backend that holds the keys and confirms payments by webhook.
+  Card numbers are never stored; in live mode the card fields should be the provider's secure fields.
+- Accounts, the uploaded report-card template and book covers are stored in the browser until the backend exists,
+  so they are per device. Activation codes are handed out by the school (no email/SMS provider is connected yet).
 - PDF output uses the browser's "Print / Save as PDF"; spreadsheets download as `.csv` / `.xlsx`.

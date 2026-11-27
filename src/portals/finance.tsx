@@ -46,6 +46,45 @@ export function FinanceOverview({ onNavigate }: PageProps) {
   );
 }
 
+function PaymentSettings() {
+  const s = useSchool();
+  const [bank, setBank] = useState(s.school.bank);
+  const [wallets, setWallets] = useState(s.school.mobileMoney);
+  const [saved, setSaved] = useState('');
+  const setW = (i: number, patch: Partial<(typeof wallets)[number]>) => setWallets(wallets.map((w, j) => (j === i ? { ...w, ...patch } : w)));
+  return (
+    <Card title="How parents pay" subtitle="Shown to parents on the fee payment page. Payments into these accounts are credited to the school.">
+      {saved && <div className="mb-3"><Notice tone="success">{saved}</Notice></div>}
+      <div className="grid lg:grid-cols-3 gap-6">
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-navy-900">Bank account (bank slips)</h3>
+          {([['bank', 'Bank'], ['accountName', 'Account name'], ['accountNo', 'Account number'], ['branch', 'Branch'], ['swift', 'SWIFT code']] as const).map(([k, l]) => <Field key={k} label={l}><input className="input py-2 text-sm" value={bank[k]} onChange={(e) => setBank({ ...bank, [k]: e.target.value })} /></Field>)}
+          <button type="button" className="btn-secondary text-sm" onClick={() => { actions.setBank(bank); setSaved('Bank details saved.'); }}>Save bank details</button>
+        </div>
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-navy-900">Mobile money merchant accounts</h3>
+          {wallets.map((w, i) => (
+            <div key={i} className="rounded-lg border border-navy-100 p-3 space-y-2">
+              <select className="input py-1.5 text-sm" value={w.provider} onChange={(e) => setW(i, { provider: e.target.value as typeof w.provider })} aria-label="Provider"><option>MTN Mobile Money</option><option>Orange Money</option></select>
+              <input className="input py-1.5 text-sm" placeholder="Merchant / account name" value={w.merchantName} onChange={(e) => setW(i, { merchantName: e.target.value })} aria-label="Merchant name" />
+              <input className="input py-1.5 text-sm" placeholder="Merchant number" value={w.number} onChange={(e) => setW(i, { number: e.target.value })} aria-label="Merchant number" />
+              <input className="input py-1.5 text-sm" placeholder="Dial code for the mobile money menu (optional)" value={w.dialCode} onChange={(e) => setW(i, { dialCode: e.target.value })} aria-label="Dial code" />
+              <button type="button" className="text-xs text-error-600" onClick={() => setWallets(wallets.filter((_, j) => j !== i))}>Remove</button>
+            </div>
+          ))}
+          <div className="flex gap-2"><button type="button" className="btn-ghost text-sm" onClick={() => setWallets([...wallets, { provider: 'MTN Mobile Money', merchantName: s.school.name, number: '', dialCode: '' }])}>+ Add wallet</button><button type="button" className="btn-secondary text-sm" onClick={() => { actions.setWallets(wallets.filter((w) => w.number.trim())); setSaved('Mobile money accounts saved.'); }}>Save wallets</button></div>
+          <p className="text-xs text-navy-400">The dial code (from your provider) lets parents open their phone's mobile money menu with one tap if the payment prompt doesn't arrive.</p>
+        </div>
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-navy-900">Online card and mobile money processing</h3>
+          <div className="rounded-lg bg-navy-50 p-3 text-sm"><p>Provider: <b>{s.school.paymentProvider.name}</b></p><p className="mt-1">{s.school.paymentProvider.connected ? <Pill tone="success">Live — payments settle to the school</Pill> : <Pill tone="warning">Demonstration mode</Pill>}</p></div>
+          <p className="text-xs text-navy-500">To receive real card and mobile money payments, the school needs a merchant account with a licensed provider (for example Flutterwave, MTN MoMo or Orange Money merchant services). Innovexa connects it securely on the server; card details never pass through the school.</p>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 export function FeeStructurePage() {
   const s = useSchool();
   const [edit, setEdit] = useState<number | null>(null);
@@ -53,6 +92,7 @@ export function FeeStructurePage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <Header title="School Fee Structure" subtitle="Approved fees for the year. New registrations get a fee account from this structure automatically." />
+      <PaymentSettings />
       <div className="grid lg:grid-cols-2 gap-6">
         {s.feeStructures.map((f) => (
           <Card key={f.gradeFrom} title={`Grades ${f.gradeFrom}–${f.gradeTo} (${f.gradeFrom <= 9 ? 'Junior High' : 'Senior High'})`} action={edit === f.gradeFrom ? undefined : <button type="button" className="btn-secondary text-sm" onClick={() => { setEdit(f.gradeFrom); setItems(f.items.map((i) => ({ ...i }))); }}>Edit</button>}>
@@ -338,7 +378,7 @@ export function FinancialReports() {
 export function Reconciliation() {
   const s = useSchool();
   const f = financeSummary(s);
-  const byMethod = (['Cash', 'Bank deposit', 'Mobile money', 'Card (demo)'] as const).map((m) => ({ m, n: s.payments.filter((p) => p.method === m).length, total: s.payments.filter((p) => p.method === m).reduce((a, p) => a + p.amount, 0) }));
+  const byMethod = (['Cash', 'Bank deposit', 'Mobile money', 'Card', 'Card (demo)', 'Mobile money (demo)'] as const).map((m) => ({ m, n: s.payments.filter((p) => p.method === m).length, total: s.payments.filter((p) => p.method === m).reduce((a, p) => a + p.amount, 0) }));
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   return (
     <div className="space-y-6 animate-fade-in">

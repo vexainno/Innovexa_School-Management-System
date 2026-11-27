@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Activity, Building2, Database, HardDrive, LifeBuoy, ShieldCheck, Users } from 'lucide-react';
 import { actions, fmtDate, money, useSchool } from '@/store/store';
 import type { TenantSchool } from '@/store/types';
+import type { Role } from '@/types';
 import { Card, Dialog, Field, Header, Meter, Notice, Pill, Stat, Table } from '@/components/kit';
 import { greeting, useMe, type PageProps } from './shared';
 
@@ -119,6 +120,38 @@ export function Subscriptions() {
   );
 }
 
+const SCHOOL_ROLES: { role: Role; label: string }[] = [
+  { role: 'principal', label: 'Principal' }, { role: 'vice_principal', label: 'Vice Principal' }, { role: 'academic_officer', label: 'Academic Officer' },
+  { role: 'registrar', label: 'Registrar' }, { role: 'finance', label: 'Finance Director' }, { role: 'dean', label: 'Dean of Students' },
+  { role: 'counselor', label: 'Guidance Counselor' }, { role: 'librarian', label: 'Librarian' }, { role: 'teacher', label: 'Teacher' },
+];
+
+function StaffAccounts() {
+  const s = useSchool();
+  const me = useMe();
+  const [f, setF] = useState({ name: '', email: '', phone: '', role: 'teacher' as Role, subjects: '' });
+  const [made, setMade] = useState<{ email: string; code: string } | null>(null);
+  const staffAccts = s.accounts.filter((a) => a.role !== 'student' && a.role !== 'parent' && a.role !== 'super_admin');
+  const emailTaken = s.accounts.some((a) => a.email === f.email.trim().toLowerCase());
+  return (
+    <Card title="School staff accounts" subtitle="Innovexa creates staff logins during onboarding. Each person activates with the code and chooses their own password.">
+      {made && <div className="mb-4"><Notice tone="success">Account created for <b>{made.email}</b>. Activation code: <span className="font-mono font-bold text-lg">{made.code}</span>. Give it to the staff member privately.</Notice></div>}
+      <div className="grid md:grid-cols-5 gap-3 items-end">
+        <Field label="Full name"><input className="input py-2 text-sm" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
+        <Field label="Email"><input type="email" className="input py-2 text-sm" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></Field>
+        <Field label="Phone"><input className="input py-2 text-sm" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></Field>
+        <Field label="Role"><select className="input py-2 text-sm" value={f.role} onChange={(e) => setF({ ...f, role: e.target.value as Role })}>{SCHOOL_ROLES.map((r) => <option key={r.role} value={r.role}>{r.label}</option>)}</select></Field>
+        {f.role === 'teacher' ? <Field label="Subjects (comma separated)"><input className="input py-2 text-sm" value={f.subjects} onChange={(e) => setF({ ...f, subjects: e.target.value })} placeholder="Mathematics, Physics" /></Field> : <div />}
+      </div>
+      {emailTaken && <p className="text-xs text-error-600 mt-2">This email already has an account.</p>}
+      <div className="flex justify-end mt-3"><button type="button" className="btn-primary text-sm" disabled={!f.name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email) || emailTaken} onClick={() => { const a = actions.createStaff({ name: f.name, email: f.email, role: f.role, phone: f.phone, position: SCHOOL_ROLES.find((r) => r.role === f.role)!.label, subjects: f.subjects.split(',').map((x) => x.trim()).filter(Boolean) }, me.name); setMade({ email: a.email, code: a.activationCode }); setF({ name: '', email: '', phone: '', role: f.role, subjects: '' }); }}>Create staff account</button></div>
+      <div className="mt-5"><Table head={['Name', 'Role', 'Email', 'Status', 'Activation code', '']} empty="No staff accounts yet.">
+        {staffAccts.map((a) => <tr key={a.id}><td className="font-medium">{a.name}</td><td>{SCHOOL_ROLES.find((r) => r.role === a.role)?.label}</td><td className="text-xs">{a.email}</td><td><Pill tone={a.status === 'active' ? 'success' : a.status === 'invited' ? 'warning' : 'muted'}>{a.status === 'invited' ? 'Not activated' : a.status}</Pill></td><td className="font-mono">{a.status === 'invited' ? a.activationCode : '—'}</td><td className="whitespace-nowrap"><button type="button" className="text-xs text-navy-700 hover:underline mr-3" onClick={() => actions.resetAccess(a.id)}>Reset access</button><button type="button" className="text-xs text-navy-700 hover:underline" onClick={() => actions.setAccountStatus(a.id, a.status === 'disabled' ? 'invited' : 'disabled')}>{a.status === 'disabled' ? 'Enable' : 'Disable'}</button></td></tr>)}
+      </Table></div>
+    </Card>
+  );
+}
+
 export function PlatformUsers() {
   const s = useSchool();
   const staff = [
@@ -129,7 +162,8 @@ export function PlatformUsers() {
   ];
   return (
     <div className="space-y-6 animate-fade-in">
-      <Header title="Platform Users" subtitle="Innovexa staff accounts and each school's primary administrator." />
+      <Header title="Platform Users" subtitle="Innovexa staff accounts, each school's administrator, and the school staff logins Innovexa creates." />
+      <StaffAccounts />
       <Card title="Innovexa staff"><Table head={['Name', 'Email', 'Role', 'MFA', 'Last active']}>{staff.map((u) => <tr key={u.email}><td className="font-medium">{u.name}</td><td>{u.email}</td><td>{u.role}</td><td>{u.mfa ? <Pill tone="success">On</Pill> : <Pill tone="error">Off</Pill>}</td><td>{u.last}</td></tr>)}</Table></Card>
       <Card title="School administrators"><Table head={['School', 'Administrator', 'Status']}>{s.tenants.map((t) => <tr key={t.id}><td>{t.name}</td><td>{t.admin}</td><td><Pill tone={statusTone(t.status)}>{t.status}</Pill></td></tr>)}</Table></Card>
     </div>

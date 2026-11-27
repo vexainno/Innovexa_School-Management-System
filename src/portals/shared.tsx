@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Bell, CalendarDays, CheckCheck, Megaphone, Send } from 'lucide-react';
+import { Bell, CalendarDays, CheckCheck, HeartHandshake, Megaphone, Send } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import type { Role } from '@/types';
 import type { Audience } from '@/store/types';
 import { actions, announcementVisibleTo, fmtDate, notificationsFor, studentById, studentIdForUser, useSchool } from '@/store/store';
-import { Card, Header, Notice, Pill, Tabs } from '@/components/kit';
+import { Card, Dialog, Header, Notice, Pill, Tabs } from '@/components/kit';
 
 export type PageProps = { onNavigate: (page: string) => void; param?: string };
 
@@ -19,11 +19,38 @@ export function greeting(name: string) {
   return `${h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'}, ${name}`;
 }
 
-export function NotificationsPage({ onNavigate }: PageProps) {
+function MessageThread({ id, onClose }: { id: string | null; onClose: () => void }) {
+  const me = useMe();
+  const school = useSchool();
+  const n = school.notifications.find((x) => x.id === id);
+  const [text, setText] = useState('');
+  if (!n) return null;
+  const canReply = me.role === 'student' && n.from === 'counselor';
+  return (
+    <Dialog open onClose={onClose} wide title={n.title} footer={canReply ? (
+      <div className="flex w-full gap-2">
+        <textarea className="input min-h-[44px] flex-1" rows={2} placeholder="Write a private reply to the counselor…" value={text} onChange={(e) => setText(e.target.value)} aria-label="Reply" />
+        <button type="button" className="btn-primary self-end" disabled={!text.trim()} onClick={() => { actions.replyToNotification(n.id, { from: 'student', name: me.name, text: text.trim() }); setText(''); }}><Send className="w-4 h-4" /> Send</button>
+      </div>
+    ) : undefined}>
+      <div className="flex items-center gap-2 text-sm text-navy-500 mb-3">{n.from === 'counselor' && <><HeartHandshake className="w-4 h-4" /> Guidance Counselor ·</>} {fmtDate(n.createdAt)} {n.studentOnly && <Pill tone="accent">Private — only you can see this</Pill>}</div>
+      <div className="rounded-xl bg-navy-50 p-4 text-sm text-navy-800 whitespace-pre-line">{n.body}</div>
+      {(n.replies ?? []).length > 0 && (
+        <div className="space-y-3 mt-4">
+          {n.replies!.map((r, i) => <div key={i} className={`max-w-[85%] rounded-xl px-3 py-2 text-sm whitespace-pre-line ${r.from === 'student' ? 'ml-auto bg-navy-700 text-white' : 'bg-success-50 text-navy-800'}`}>{r.text}<p className="text-[10px] opacity-70 mt-1">{r.from === 'student' ? 'You' : r.name} · {fmtDate(r.at)}</p></div>)}
+        </div>
+      )}
+      {canReply && <p className="text-xs text-navy-400 mt-4">Your reply goes only to the Guidance Counselor. Parents and teachers cannot see this conversation. If you are in danger right now, tell a teacher or call for help immediately.</p>}
+    </Dialog>
+  );
+}
+
+export function NotificationsPage({ onNavigate, param }: PageProps) {
   const me = useMe();
   const school = useSchool();
   const list = notificationsFor(school, me);
   const [tab, setTab] = useState<'all' | 'unread'>('all');
+  const [thread, setThread] = useState<string | null>(param && school.notifications.some((n) => n.id === param) ? param : null);
   const shown = tab === 'unread' ? list.filter((n) => !n.readBy.includes(me.id)) : list;
   return (
     <div className="animate-fade-in">
@@ -36,11 +63,11 @@ export function NotificationsPage({ onNavigate }: PageProps) {
         {shown.map((n) => {
           const unread = !n.readBy.includes(me.id);
           return (
-            <button key={n.id} type="button" onClick={() => { actions.markRead(n.id, me.id); if (n.link && n.link !== 'notifications') onNavigate(n.link); }}
+            <button key={n.id} type="button" onClick={() => { actions.markRead(n.id, me.id); if (n.from === 'counselor' || n.link?.startsWith('notifications:')) { setThread(n.link?.startsWith('notifications:') ? n.link.split(':')[1] : n.id); } else if (n.link && n.link !== 'notifications') onNavigate(n.link); }}
               className={`card w-full text-left p-4 flex gap-3 hover:border-navy-300 ${unread ? 'border-l-4 border-l-navy-600' : ''}`}>
               <Bell className={`w-5 h-5 shrink-0 mt-0.5 ${unread ? 'text-navy-700' : 'text-navy-300'}`} />
               <span className="flex-1 min-w-0">
-                <span className="flex flex-wrap items-center gap-2"><span className={`text-sm ${unread ? 'font-semibold text-navy-900' : 'text-navy-700'}`}>{n.title}</span>{n.studentOnly && <Pill tone="accent">Private</Pill>}</span>
+                <span className="flex flex-wrap items-center gap-2"><span className={`text-sm ${unread ? 'font-semibold text-navy-900' : 'text-navy-700'}`}>{n.title}</span>{n.studentOnly && <Pill tone="accent">Private</Pill>}{n.from === 'counselor' && <Pill tone="success">{(n.replies ?? []).length ? `${n.replies!.length} repl${n.replies!.length === 1 ? 'y' : 'ies'}` : 'Open to reply'}</Pill>}</span>
                 <span className="block text-sm text-navy-500 mt-0.5">{n.body}</span>
                 <span className="block text-xs text-navy-400 mt-1">{fmtDate(n.createdAt)}</span>
               </span>
@@ -48,6 +75,7 @@ export function NotificationsPage({ onNavigate }: PageProps) {
           );
         })}
       </div>
+      <MessageThread key={thread ?? ''} id={thread} onClose={() => setThread(null)} />
     </div>
   );
 }

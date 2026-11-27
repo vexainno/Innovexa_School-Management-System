@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Building2, CalendarCheck, CheckCircle2, CreditCard, FileBadge, GraduationCap, Lock, Printer, Smartphone, Wallet } from 'lucide-react';
+import { Building2, CalendarCheck, FileBadge, GraduationCap, Printer, Wallet } from 'lucide-react';
 import {
   actions, attendanceSummary, batchStage, CATEGORY_LABEL, categoryFor, className, feeAccount, fmtDate, letterFor,
   money, notificationsFor, schoolDays, staffName, studentAverage, studentById, subjectTotals, useSchool,
@@ -7,6 +7,7 @@ import {
 import { esc, printHtml } from '@/store/files';
 import { Card, Dialog, Field, Header, Meter, Notice, Pill, Stat, Table, Tabs, catTone } from '@/components/kit';
 import { SectionTimetable } from './academic';
+import { OnlinePayment } from './parentPay';
 import { AttendanceHistory } from './common';
 import { printReceipt } from './finance';
 import { ReleasedReportCard } from './student';
@@ -224,29 +225,14 @@ export function TeacherCommunication() {
 
 /* ------------------------------ Fees & payment ------------------------------ */
 
-const METHODS = [
-  { id: 'visa', label: 'Visa', detail: '•••• 4417 · saved', icon: CreditCard, brand: 'bg-gradient-to-br from-navy-700 to-navy-900 text-white' },
-  { id: 'mc', label: 'Mastercard', detail: '•••• 9021 · saved', icon: CreditCard, brand: 'bg-gradient-to-br from-accent-500 to-error-600 text-white' },
-  { id: 'momo', label: 'MTN Mobile Money', detail: '+231 88 ••• 7781', icon: Smartphone, brand: 'bg-gradient-to-br from-accent-300 to-accent-500 text-navy-900' },
-  { id: 'orange', label: 'Orange Money', detail: '+231 77 ••• 4567', icon: Smartphone, brand: 'bg-gradient-to-br from-orange-400 to-orange-600 text-white' },
-];
 
 export function FeesAndPayment() {
   const { me, s, ids, id, child, setId } = useChild();
   const [mode, setMode] = useState<'statement' | 'card' | 'bank'>('statement');
-  const [method, setMethod] = useState('visa');
-  const [full, setFull] = useState(true);
-  const [partial, setPartial] = useState('');
-  const [agree, setAgree] = useState(false);
-  const [stage, setStage] = useState<'form' | 'processing' | 'done'>('form');
-  const [receipt, setReceipt] = useState('');
+  /** 'done' = a payment session is open, so the checkout stays on screen even after the balance reaches zero. */
+  const [stage, setStage] = useState<'form' | 'done'>('form');
   if (!child) return null;
   const a = feeAccount(s, id);
-  const amount = full ? a.balance : Math.min(Number(partial) || 0, a.balance);
-  const pay = () => {
-    setStage('processing');
-    setTimeout(() => { setReceipt(actions.recordPayment({ studentId: id, amount, method: 'Card (demo)', reference: `DEMO-${METHODS.find((m) => m.id === method)?.label.toUpperCase().replace(/\s/g, '')}`, by: `${me.name} (online)` })); setStage('done'); }, 1400);
-  };
   const slip = () => printHtml('Bank deposit slip', `<div class="box"><h1>${esc(s.school.bank.bank)}</h1><p class="muted">${esc(s.school.bank.branch)}</p><h2>SCHOOL FEES DEPOSIT SLIP</h2>
     <table><tr><th>Account name</th><td>${esc(s.school.bank.accountName)}</td></tr><tr><th>Account number</th><td><b>${esc(s.school.bank.accountNo)}</b></td></tr><tr><th>SWIFT</th><td>${esc(s.school.bank.swift)}</td></tr>
     <tr><th>Student name</th><td>${esc(child.name)}</td></tr><tr><th>Student ID (payment reference)</th><td><b>${esc(child.studentNo)}</b></td></tr><tr><th>Class</th><td>${esc(className(child.grade, child.section))}</td></tr>
@@ -263,7 +249,7 @@ export function FeesAndPayment() {
         <Stat label="Outstanding balance" value={money(a.balance)} tone={a.balance ? 'error' : 'success'} />
         {a.overdueSince ? <Stat label="Payment overdue" value={<span className="text-base">Since {fmtDate(a.overdueSince)}</span>} sub={`Next deadline ${fmtDate(a.nextDue)}`} tone="error" /> : <Stat label="Next deadline" value={<span className="text-base">{a.balance ? fmtDate(a.nextDue) : 'None — fully paid'}</span>} tone="warning" />}
       </div>
-      <Tabs tabs={[{ id: 'statement', label: 'Statement' }, { id: 'card', label: 'Pay online' }, { id: 'bank', label: 'Pay at the bank' }]} value={mode} onChange={(m) => { setMode(m); setStage('form'); }} />
+      <Tabs tabs={[{ id: 'statement', label: 'Statement' }, { id: 'card', label: 'Pay online (card or mobile money)' }, { id: 'bank', label: 'Pay at the bank' }]} value={mode} onChange={(m) => { setMode(m); setStage(m === 'card' && a.balance > 0 ? 'done' : 'form'); }} />
       {mode === 'statement' && (
         <div className="grid lg:grid-cols-2 gap-6">
           <Card title="Fees charged"><Table head={['Item', 'Amount']}>{a.structure?.items.map((i) => <tr key={i.name}><td>{i.name}</td><td>{money(i.amount)}</td></tr>)}<tr className="font-semibold"><td>Total</td><td>{money(a.charged)}</td></tr></Table></Card>
@@ -271,47 +257,7 @@ export function FeesAndPayment() {
           <Card title="Receipts" className="lg:col-span-2"><Table head={['Date', 'Receipt', 'Method', 'Amount', '']} empty="No payments recorded yet.">{a.payments.map((p) => <tr key={p.id}><td>{fmtDate(p.date)}</td><td className="font-mono text-xs">{p.receiptNo}</td><td>{p.method}</td><td>{money(p.amount)}</td><td><button type="button" className="btn-secondary text-xs py-1.5" onClick={() => printReceipt(s, p)}><Printer className="w-3.5 h-3.5" /> Download receipt</button></td></tr>)}</Table></Card>
         </div>
       )}
-      {mode === 'card' && (stage !== 'done' && a.balance <= 0 ? <Notice tone="success">{child.firstName}'s fees are fully paid. Thank you!</Notice> : stage === 'done' ? (
-        <Card>
-          <div className="text-center py-6">
-            <CheckCircle2 className="w-14 h-14 text-success-600 mx-auto" />
-            <h2 className="text-xl font-bold text-navy-900 mt-3">Demo payment complete</h2>
-            <p className="text-sm text-navy-600 mt-1">Receipt {receipt}. {child.firstName}'s new balance is {money(feeAccount(s, id).balance)}. The Finance Office has been notified.</p>
-            <p className="text-xs text-navy-400 mt-2">This was a demonstration — no money moved. Live payments will go through a licensed payment provider.</p>
-            <div className="flex justify-center gap-2 mt-4"><button type="button" className="btn-secondary" onClick={() => { const p = s.payments.find((x) => x.receiptNo === receipt); if (p) printReceipt(s, p); }}><Printer className="w-4 h-4" /> Receipt</button><button type="button" className="btn-primary" onClick={() => { setStage('form'); setMode('statement'); }}>Back to statement</button></div>
-          </div>
-        </Card>
-      ) : (
-        <div className="grid lg:grid-cols-[1fr_340px] gap-6">
-          <Card title="Choose a payment method">
-            <div className="grid sm:grid-cols-2 gap-3">
-              {METHODS.map((m) => (
-                <button key={m.id} type="button" onClick={() => setMethod(m.id)} aria-pressed={method === m.id} className={`relative rounded-2xl p-4 text-left h-28 flex flex-col justify-between transition-all ${m.brand} ${method === m.id ? 'ring-4 ring-navy-400 ring-offset-2 scale-[1.01]' : 'opacity-80 hover:opacity-100'}`}>
-                  <m.icon className="w-6 h-6" />
-                  <span><span className="block font-semibold">{m.label}</span><span className="block text-xs opacity-90">{m.detail}</span></span>
-                  {method === m.id && <CheckCircle2 className="absolute top-3 right-3 w-5 h-5" />}
-                </button>
-              ))}
-            </div>
-            <button type="button" className="mt-3 text-sm text-navy-500 cursor-not-allowed" disabled title="New cards are added on the payment provider's secure page once live payments are enabled.">+ Add payment method (available when live payments are enabled)</button>
-            <div className="mt-5 space-y-3">
-              <label className="flex items-center gap-2 text-sm"><input type="radio" checked={full} onChange={() => setFull(true)} /> Pay full balance — {money(a.balance)}</label>
-              <label className="flex items-center gap-2 text-sm"><input type="radio" checked={!full} onChange={() => setFull(false)} /> Pay part of the balance</label>
-              {!full && <input type="number" className="input max-w-xs" placeholder="Amount (US$)" value={partial} onChange={(e) => setPartial(e.target.value)} aria-label="Partial amount" />}
-            </div>
-          </Card>
-          <Card title="Summary">
-            <dl className="text-sm space-y-2">
-              {[['School', s.school.name], ['Student', child.name], ['Student ID', child.studentNo], ['Fee', 'School fees ' + s.school.academicYear], ['Outstanding', money(a.balance)]].map(([k, v]) => <div key={k} className="flex justify-between gap-3"><dt className="text-navy-500">{k}</dt><dd className="text-right">{v}</dd></div>)}
-              <div className="flex justify-between gap-3 border-t border-navy-100 pt-2 text-base font-bold"><dt>Paying now</dt><dd>{money(amount)}</dd></div>
-            </dl>
-            <div className="rounded-lg bg-navy-50 p-3 mt-4 text-xs text-navy-600 flex gap-2"><Lock className="w-4 h-4 shrink-0" /> Card details are never stored by the school. Live payments will be processed on the payment provider's secure page.</div>
-            <label className="flex items-start gap-2 text-sm mt-3"><input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-1" /> I agree to the school's fee payment terms.</label>
-            <button type="button" className="btn-primary w-full mt-4" disabled={!agree || amount <= 0 || stage === 'processing'} onClick={pay}>{stage === 'processing' ? 'Processing…' : `Pay ${money(amount)} (demo)`}</button>
-            <p className="text-[11px] text-navy-400 mt-2 text-center">Demonstration checkout — no money is charged.</p>
-          </Card>
-        </div>
-      ))}
+      {mode === 'card' && (a.balance <= 0 && stage !== 'done' ? <Notice tone="success">{child.firstName}'s fees are fully paid. Thank you!</Notice> : <OnlinePayment key={id} studentId={id} onBack={() => { setStage('form'); setMode('statement'); }} />)}
       {mode === 'bank' && (
         <div className="grid lg:grid-cols-2 gap-6">
           <Card title="School bank account">

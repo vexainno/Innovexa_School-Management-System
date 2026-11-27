@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { School, Mail, Lock, Eye, EyeOff, AlertCircle, ShieldCheck, KeyRound, CheckCircle2 } from 'lucide-react';
+import { School, Mail, Lock, Eye, EyeOff, AlertCircle, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { mockAuthService } from '@/services/authService';
+import { ActivateAccountDialog, FirstRunSetup, ForgotPasswordDialog } from './AccountAccess';
 
 export function LoginPage() {
   const { login } = useAuth();
@@ -11,22 +13,18 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [remember, setRemember] = useState(true);
   const [showForgot, setShowForgot] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState('');
-  const [forgotSent, setForgotSent] = useState(false);
-  const [forgotError, setForgotError] = useState('');
+  const [showActivate, setShowActivate] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-    setTimeout(() => {
-      const result = login(email, password, remember);
-      if (!result.success) {
-        setError(result.error || 'Login failed');
-      }
-      setLoading(false);
-    }, 500);
+    const result = await login(email, password, remember);
+    if (!result.success) setError(result.error || 'Login failed');
+    setLoading(false);
   };
+
+  if (mockAuthService.needsSetup()) return <FirstRunSetup />;
 
 
 
@@ -138,7 +136,7 @@ export function LoginPage() {
                 <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="rounded border-navy-300 text-navy-700 focus:ring-navy-500" />
                 Remember me
               </label>
-              <button type="button" onClick={() => { setShowForgot(true); setForgotSent(false); setForgotError(''); }} className="text-sm text-navy-600 hover:text-navy-800 font-medium">
+              <button type="button" onClick={() => setShowForgot(true)} className="text-sm text-navy-600 hover:text-navy-800 font-medium">
                 Forgot password?
               </button>
             </div>
@@ -155,6 +153,11 @@ export function LoginPage() {
             </button>
           </form>
 
+          <div className="mt-6 rounded-xl border border-navy-200 bg-white p-4 text-center">
+            <p className="text-sm text-navy-600">First time here?</p>
+            <button type="button" onClick={() => setShowActivate(true)} className="mt-1 text-sm font-semibold text-navy-800 hover:underline">Activate your account with the code from your school</button>
+          </div>
+
           
 
           <p className="mt-6 text-xs text-center text-navy-400">
@@ -163,70 +166,8 @@ export function LoginPage() {
         </div>
       </div>
 
-      {showForgot && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="absolute inset-0 bg-navy-950/50 backdrop-blur-sm" onClick={() => setShowForgot(false)} />
-          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md p-6 animate-slide-up">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-navy-100 text-navy-700"><KeyRound className="w-5 h-5" /></div>
-                <h2 className="text-lg font-semibold font-display text-navy-900">Forgot Password</h2>
-              </div>
-              <button onClick={() => setShowForgot(false)} className="text-navy-400 hover:text-navy-700 p-1 rounded-lg hover:bg-navy-50">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-              </button>
-            </div>
-
-            {forgotSent ? (
-              <div className="space-y-4">
-                <div className="flex flex-col items-center py-4">
-                  <div className="w-14 h-14 rounded-full bg-success-100 flex items-center justify-center mb-4">
-                    <CheckCircle2 className="w-7 h-7 text-success-600" />
-                  </div>
-                  <h3 className="font-semibold text-navy-800 text-center">Demo request recorded</h3>
-                  <p className="text-sm text-navy-500 mt-1 text-center max-w-xs">
-                    This is a frontend demonstration only. No email was sent. In the live product, recovery will be handled by the connected authentication service.
-                  </p>
-                </div>
-                <button onClick={() => setShowForgot(false)} className="btn-primary w-full">Back to Login</button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <p className="text-sm text-navy-600">Enter your registered email address to preview the recovery request. This demo does not send email or reveal whether an account exists. If you cannot access your email, contact an authorized school officer for identity-verified recovery.</p>
-                <div>
-                  <label className="label">Email Address</label>
-                  <input
-                    type="email"
-                    className="input"
-                    value={forgotEmail}
-                    onChange={(e) => setForgotEmail(e.target.value)}
-                    placeholder="you@innosys.edu"
-                  />
-                </div>
-                {forgotError && (
-                  <div className="flex items-center gap-2 px-3 py-2.5 bg-error-50 border border-error-200 rounded-lg text-sm text-error-700">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>{forgotError}</span>
-                  </div>
-                )}
-                <div className="flex gap-3 justify-end">
-                  <button onClick={() => setShowForgot(false)} className="btn-secondary">Cancel</button>
-                  <button
-                    onClick={() => {
-                      if (!forgotEmail.trim()) {
-                        setForgotError('Please enter your email address.');
-                        return;
-                      }
-                      setForgotSent(true);
-                    }}
-                    className="btn-primary"
-                  >Send Reset Link</button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <ForgotPasswordDialog open={showForgot} onClose={() => setShowForgot(false)} onActivate={() => setShowActivate(true)} />
+      <ActivateAccountDialog open={showActivate} onClose={() => setShowActivate(false)} />
     </div>
   );
 }

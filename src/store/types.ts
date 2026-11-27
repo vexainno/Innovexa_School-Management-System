@@ -51,8 +51,58 @@ export interface Assignment {
   teacherId: string;
 }
 
+export type WeekDay = 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday';
+
+export interface DayBlock {
+  id: string;
+  kind: 'assembly' | 'lesson' | 'break' | 'lunch' | 'activity' | 'dismissal';
+  label: string;
+  start: string;
+  end: string;
+}
+
+export interface ScheduleConfig {
+  days: WeekDay[];
+  blocks: DayBlock[];
+  status: 'draft' | 'published';
+  publishedAt?: string;
+  effectiveFrom?: string;
+}
+
+export interface Account {
+  id: string;
+  email: string;
+  name: string;
+  role: Role;
+  studentIds: string[];
+  staffId?: string;
+  status: 'invited' | 'active' | 'disabled';
+  activationCode: string;
+  passwordHash?: string;
+  salt?: string;
+  createdAt: string;
+  createdBy: string;
+}
+
+export interface BookRequest {
+  id: string;
+  bookId: string;
+  studentId: string;
+  requestedAt: string;
+  status: 'pending' | 'approved' | 'declined' | 'collected' | 'cancelled';
+  pickupBy?: string;
+  note?: string;
+}
+
+export interface MobileMoneyWallet {
+  provider: 'MTN Mobile Money' | 'Orange Money';
+  merchantName: string;
+  number: string;
+  dialCode: string;
+}
+
 export interface TimetableSlot {
-  day: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday';
+  day: WeekDay;
   period: number;
   grade: number;
   section: string;
@@ -224,7 +274,7 @@ export interface Substitution {
   id: string;
   date: string;
   absentTeacherId: string;
-  day: TimetableSlot['day'];
+  day: WeekDay;
   period: number;
   grade: number;
   section: string;
@@ -280,7 +330,7 @@ export interface Payment {
   receiptNo: string;
   studentId: string;
   amount: number;
-  method: 'Cash' | 'Bank deposit' | 'Mobile money' | 'Card (demo)';
+  method: 'Cash' | 'Bank deposit' | 'Mobile money' | 'Card' | 'Card (demo)' | 'Mobile money (demo)';
   reference: string;
   date: string;
   recordedBy: string;
@@ -328,6 +378,8 @@ export interface Book {
   copies: number;
   shelf: string;
   year: number;
+  cover?: string;
+  description?: string;
 }
 
 export interface Loan {
@@ -377,6 +429,8 @@ export interface AppNotification {
   /** Private to the student only (not guardians). */
   studentOnly?: boolean;
   from?: string;
+  fromName?: string;
+  replies?: { from: 'student' | 'staff'; name: string; at: string; text: string }[];
   readBy: string[];
 }
 
@@ -496,7 +550,15 @@ export interface SchoolState {
     currentPeriod: string | null;
     bank: { bank: string; accountName: string; accountNo: string; branch: string; swift: string };
     parentTeacherMessaging: boolean;
+    mobileMoney: MobileMoneyWallet[];
+    paymentProvider: { name: string; connected: boolean };
+    classes: { grade: number; sections: string[] }[];
   };
+  mode: 'demo' | 'live';
+  schedule: ScheduleConfig;
+  accounts: Account[];
+  bookRequests: BookRequest[];
+  reportTemplateFile?: { name: string; size: number; uploadedAt: string; active: boolean };
   students: SchoolStudent[];
   staff: StaffMember[];
   assignments: Assignment[];

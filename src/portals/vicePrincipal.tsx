@@ -1,24 +1,20 @@
 import { useState } from 'react';
 import { CalendarDays, CalendarPlus, Repeat2, Send, UserCheck, UserX, Users } from 'lucide-react';
 import {
-  actions, activeStudents, allSections, attendanceSummary, className, fmtDate, lastSchoolDay, staffName, studentAttendance, teachers, useSchool,
+  actions, activeStudents, allSections, attendanceSummary, blockTime, className, fmtDate, lastSchoolDay, lessonBlocks, staffName, studentAttendance, teachers, useSchool,
 } from '@/store/store';
-import { DAYS, PERIODS } from '@/store/seed';
-import type { StaffAttendanceStatus, TimetableSlot } from '@/store/types';
-import { Card, ClassSectionPicker, Dialog, Header, Notice, Pill, Stat, Table, Tabs } from '@/components/kit';
+import type { SchoolState, StaffAttendanceStatus, TimetableSlot } from '@/store/types';
+import { Card, Header, Notice, Pill, Stat, Table, Tabs } from '@/components/kit';
 import { SectionTimetable } from './academic';
 import { AttendanceReports } from './principal';
 import { greeting, useMe, type PageProps } from './shared';
 
-const todayDay = (): TimetableSlot['day'] => {
-  const d = new Date(`${lastSchoolDay()}T12:00:00`).getDay();
-  return DAYS[Math.max(0, Math.min(4, d - 1))];
-};
-const currentPeriod = () => {
-  const h = new Date().getHours() + new Date().getMinutes() / 60;
-  const starts = [8, 8.75, 9.5, 10.75, 11.5, 13, 13.75];
+const WEEK: TimetableSlot['day'][] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const todayDay = (): TimetableSlot['day'] => WEEK[Math.max(0, Math.min(5, new Date(`${lastSchoolDay()}T12:00:00`).getDay() - 1))];
+const currentPeriod = (s: SchoolState) => {
+  const now = new Date().getHours() * 60 + new Date().getMinutes();
   let p = 1;
-  starts.forEach((s, i) => { if (h >= s) p = i + 1; });
+  lessonBlocks(s).forEach((b, i) => { const [h, m] = b.start.split(':').map(Number); if (now >= h * 60 + m) p = i + 1; });
   return p;
 };
 const STATUS: { id: StaffAttendanceStatus; label: string; tone: 'success' | 'warning' | 'error' | 'accent' | 'muted' }[] = [
@@ -74,7 +70,7 @@ export function VPOverview({ onNavigate }: PageProps) {
     .filter((m, i, arr) => arr.findIndex((x) => x.title === m.title) === i).sort((a, b) => a.date.localeCompare(b.date));
   return (
     <div className="space-y-6 animate-fade-in">
-      <Header title={greeting(me.name)} subtitle={`${s.school.name} · ${fmtDate(date)}`} action={<button type="button" className="btn-primary" onClick={() => onNavigate('calendar')}><CalendarDays className="w-4 h-4" /> Manage school calendar</button>} />
+      <Header title={greeting(me.name)} subtitle={`${s.school.name} · ${fmtDate(date)}`} action={<><button type="button" className="btn-secondary" onClick={() => onNavigate('class-schedules')}>Build weekly class schedule</button><button type="button" className="btn-primary" onClick={() => onNavigate('calendar')}><CalendarDays className="w-4 h-4" /> Manage school calendar</button></>} />
       <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <Stat label="Total Teachers" value={ts.length} icon={<Users className="w-5 h-5" />} onClick={() => onNavigate('teacher-attendance')} />
         <Stat label="Present Today" value={`${Math.round((present / ts.length) * 100)}%`} sub={`${present} of ${ts.length} teachers reported`} icon={<UserCheck className="w-5 h-5" />} tone="success" onClick={() => onNavigate('teacher-attendance')} />
@@ -118,7 +114,7 @@ export function StudentAttendance(props: PageProps) {
 export function ClassMonitoring() {
   const { s, status } = useToday();
   const [day, setDay] = useState(todayDay());
-  const [period, setPeriod] = useState(currentPeriod());
+  const [period, setPeriod] = useState(() => currentPeriod(s));
   const subs = s.substitutions.filter((x) => x.date === lastSchoolDay());
   const rows = allSections(s).map(({ grade, section }) => {
     const slot = s.timetable.find((t) => t.grade === grade && t.section === section && t.day === day && t.period === period);
@@ -132,8 +128,8 @@ export function ClassMonitoring() {
     <div className="space-y-6 animate-fade-in">
       <Header title="Class Monitoring" subtitle="Is every lesson taking place? Based on the timetable and today's teacher attendance." action={
         <div className="flex gap-2">
-          <select className="input py-2 text-sm" value={day} onChange={(e) => setDay(e.target.value as typeof day)} aria-label="Day">{DAYS.map((d) => <option key={d}>{d}</option>)}</select>
-          <select className="input py-2 text-sm" value={period} onChange={(e) => setPeriod(Number(e.target.value))} aria-label="Period">{PERIODS.map((p) => <option key={p.n} value={p.n}>Period {p.n} ({p.time})</option>)}</select>
+          <select className="input py-2 text-sm" value={day} onChange={(e) => setDay(e.target.value as typeof day)} aria-label="Day">{s.schedule.days.map((d) => <option key={d}>{d}</option>)}</select>
+          <select className="input py-2 text-sm" value={period} onChange={(e) => setPeriod(Number(e.target.value))} aria-label="Period">{lessonBlocks(s).map((b, i) => <option key={b.id} value={i + 1}>{b.label} ({blockTime(b)})</option>)}</select>
         </div>
       } />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -163,45 +159,7 @@ export function TeacherTimetables() {
   );
 }
 
-export function ClassSchedules() {
-  const s = useSchool();
-  const [grade, setGrade] = useState<number | null>(7);
-  const [section, setSection] = useState<string | null>('A');
-  const [edit, setEdit] = useState<{ day: TimetableSlot['day']; period: number } | null>(null);
-  const [form, setForm] = useState({ subject: '', teacherId: '' });
-  const [msg, setMsg] = useState('');
-  const slot = edit && grade != null && section ? s.timetable.find((t) => t.grade === grade && t.section === section && t.day === edit.day && t.period === edit.period) : null;
-  const clash = edit && form.teacherId ? s.timetable.find((t) => t.teacherId === form.teacherId && t.day === edit.day && t.period === edit.period && !(t.grade === grade && t.section === section)) : null;
-  const subjects = grade != null && section ? [...new Set(s.assignments.filter((a) => a.grade === grade && a.section === section).map((a) => a.subject)), 'Study Hall'] : [];
-  return (
-    <div className="space-y-6 animate-fade-in">
-      <Header title="Class Schedules" subtitle="Create and view the weekly timetable. Published changes appear immediately for teachers, students and parents." />
-      <ClassSectionPicker grade={grade} section={section} onChange={(g, x) => { setGrade(g); setSection(x); }} />
-      {msg && <Notice tone="success">{msg}</Notice>}
-      {grade != null && section && (
-        <Card title={`Grade ${grade}${section} weekly timetable`} subtitle="Click any lesson to change it.">
-          <div className="overflow-x-auto -mx-5 sm:-mx-6">
-            <table className="min-w-full text-xs">
-              <thead><tr className="bg-navy-50"><th className="px-3 py-2 text-left">Time</th>{DAYS.map((d) => <th key={d} className="px-3 py-2 text-left">{d}</th>)}</tr></thead>
-              <tbody>{PERIODS.map((p) => <tr key={p.n} className="border-t border-navy-100"><td className="px-3 py-2 text-navy-500 whitespace-nowrap">{p.time}</td>{DAYS.map((d) => { const x = s.timetable.find((t) => t.grade === grade && t.section === section && t.day === d && t.period === p.n); return <td key={d} className="px-1 py-1"><button type="button" onClick={() => { setEdit({ day: d, period: p.n }); setForm({ subject: x?.subject ?? '', teacherId: x?.teacherId ?? '' }); }} className="w-full text-left rounded-md px-2 py-1.5 hover:bg-navy-50"><span className="font-medium text-navy-800">{x?.subject}</span><span className="block text-navy-500">{x?.teacherId ? staffName(s, x.teacherId) : '—'}</span></button></td>; })}</tr>)}</tbody>
-            </table>
-          </div>
-        </Card>
-      )}
-      <Dialog open={!!edit} onClose={() => setEdit(null)} title={`Edit ${edit?.day} period ${edit?.period}`} footer={<>
-        <button type="button" className="btn-secondary" onClick={() => setEdit(null)}>Cancel</button>
-        <button type="button" className="btn-primary" disabled={!!clash || !form.subject} onClick={() => { if (edit && grade != null && section) { actions.setTimetableSlot({ ...edit, grade, section }, form); setMsg(`Timetable updated for Grade ${grade}${section}.`); } setEdit(null); }}>Publish change</button>
-      </>}>
-        <div className="space-y-3">
-          <p className="text-sm text-navy-500">Currently: {slot?.subject} — {slot?.teacherId ? staffName(s, slot.teacherId) : 'no teacher'}</p>
-          <label className="block"><span className="label">Subject</span><select className="input" value={form.subject} onChange={(e) => { const sub = e.target.value; setForm({ subject: sub, teacherId: s.assignments.find((a) => a.grade === grade && a.section === section && a.subject === sub)?.teacherId ?? '' }); }}>{subjects.map((x) => <option key={x}>{x}</option>)}</select></label>
-          <label className="block"><span className="label">Teacher</span><select className="input" value={form.teacherId} onChange={(e) => setForm({ ...form, teacherId: e.target.value })}><option value="">No teacher</option>{teachers(s).map((t) => <option key={t.id} value={t.id}>{t.name} ({t.subjects.join(', ')})</option>)}</select></label>
-          {clash && <Notice tone="error">Conflict: {staffName(s, form.teacherId)} already teaches Grade {clash.grade}{clash.section} at this time.</Notice>}
-        </div>
-      </Dialog>
-    </div>
-  );
-}
+export { ClassSchedules } from './scheduleBuilder';
 
 export function Substitutes({ param }: PageProps) {
   const me = useMe();
@@ -230,7 +188,7 @@ export function Substitutes({ param }: PageProps) {
           <Table head={['Period', 'Class', 'Subject', 'Room', 'Substitute']}>
             {lessons.map((l) => {
               const done = existing.find((x) => x.absentTeacherId === teacherId && x.period === l.period);
-              return <tr key={l.period}><td>P{l.period} · {PERIODS.find((p) => p.n === l.period)?.time}</td><td>{className(l.grade, l.section)}</td><td>{l.subject}</td><td>{l.room}</td><td>{done ? <Pill tone="success">{staffName(s, done.substituteId)}</Pill> : <select aria-label={`Substitute for period ${l.period}`} className="input py-1.5 text-sm" value={choice[l.period] ?? ''} onChange={(e) => setChoice({ ...choice, [l.period]: e.target.value })}><option value="">Select substitute</option>{freeAt(l.period).map((t) => <option key={t.id} value={t.id}>{t.name} ({t.subjects.join(', ')})</option>)}</select>}</td></tr>;
+              return <tr key={l.period}><td>P{l.period} · {lessonBlocks(s)[l.period - 1] ? blockTime(lessonBlocks(s)[l.period - 1]) : ''}</td><td>{className(l.grade, l.section)}</td><td>{l.subject}</td><td>{l.room}</td><td>{done ? <Pill tone="success">{staffName(s, done.substituteId)}</Pill> : <select aria-label={`Substitute for period ${l.period}`} className="input py-1.5 text-sm" value={choice[l.period] ?? ''} onChange={(e) => setChoice({ ...choice, [l.period]: e.target.value })}><option value="">Select substitute</option>{freeAt(l.period).map((t) => <option key={t.id} value={t.id}>{t.name} ({t.subjects.join(', ')})</option>)}</select>}</td></tr>;
             })}
           </Table>
           <div className="mt-4 space-y-2 text-sm">
